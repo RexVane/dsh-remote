@@ -1,0 +1,19 @@
+node_modules/
+coverage/
+*.log
+*.tgz
+
+# Local verification caches and temporary DSH homes.
+.npm-cache*/
+.tmp-*/
+.tmp-*
+
+# Local editor/agent state.
+.zcode/
+.vscode/
+.idea/
+
+# Operating-system metadata.
+.DS_Store
+Thumbs.db
+Desktop.ini

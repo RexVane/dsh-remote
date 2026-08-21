@@ -1,0 +1,62 @@
+{
+  "name": "dsh-tailscale-serve",
+  "version": "0.1.0",
+  "description": "Expose the DSH web GUI over your Tailscale tailnet — one URL for LAN (direct) and WAN (DERP relay), with automatic TLS and automatic /api trust-fence inclusion (no --trusted-host needed).",
+  "type": "module",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "verify": "node tools/verify-mobile-fit.mjs",
+    "verify:live": "node tools/verify-mobile-geometry.mjs",
+    "check": "node --check lib/index.js && node --check lib/tailscale-localapi.cjs && node --check lib/client.js && node --check tools/verify-mobile-geometry.mjs && npm test && node tools/verify-mobile-fit.mjs",
+    "check:all": "npm run check && npm run verify:live"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./client": "./lib/client.js"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/tailscale-localapi.cjs",
+    "lib/tailscale-localapi-windows.ps1",
+    "test/server.test.mjs",
+    "tools/verify-mobile-fit.mjs",
+    "tools/verify-mobile-geometry.mjs",
+    "cordis.patch.yml",
+    "MOBILE-FIT-AUDIT.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "tailscale",
+    "tailscale-serve",
+    "remote-access",
+    "lan",
+    "mesh-vpn",
+    "phone",
+    "streaming"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "immediately": true
+    }
+  }
+}
