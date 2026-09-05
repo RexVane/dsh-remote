@@ -2,7 +2,7 @@
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that exposes the web GUI over your **Tailscale tailnet** — one URL that works on **Wi-Fi (direct)** and **away (DERP relay)**, with automatic TLS, and no `--trusted-host` flag.
 
-> **Compatibility target:** Windows, DSH `0.1.0-rc.8`, Tailscale `1.102.x`, and Node.js `^22.19.0 || >=24.0.0` (the range declared by DSH rc.8). The static suite has been checked against the current rc.8 installation. The retained phone screenshots and mobile-fit audit came from an earlier live run; rerun `npm run check:all` against the installed DSH after every DSH upgrade before treating the selector-sensitive mobile layer as verified.
+> **Compatibility target:** Windows, DSH `0.1.0-rc.8`, Tailscale `1.102.x`, and Node.js `^22.19.0 || >=24.0.0` (the range declared by DSH rc.8). The static suite has been checked against the current rc.8 installation, and the trust-fence and private-RPC-channel behaviour described here was additionally verified against an installed DSH `0.1.1-rc.2`. The retained phone screenshots and mobile-fit audit came from an earlier live run; rerun `npm run check:all` against the installed DSH after every DSH upgrade before treating the selector-sensitive mobile layer as verified.
 
 ## Why
 
@@ -87,20 +87,20 @@ The two lines prove different things. `added ... trust fence` means ordinary bro
 
 1. Open the Tailscale app on the phone and confirm the device is **online** (green).
 2. Open `https://<machine>.<tailnet>.ts.net` (for example, `https://my-pc.example-tailnet.ts.net`) in the phone browser.
-3. Chat, tool calls, and deliverables stream **live** — the same session you see on the PC. The bundled profile patch also selects DSH's in-page directory browser. On Windows it opens at a virtual **This PC** view with the ready drive roots (for example `C:\` and `D:\`); choosing a drive then browses the real host folders and can create/select a workspace without invoking the host OS folder dialog.
+3. Chat, tool calls, and deliverables stream **live** — the same session you see on the PC. On the phone's non-loopback Tailscale page, adding a workspace opens the plugin's virtual **This PC** view with the ready Windows drive roots (for example `C:\` and `D:\`); choosing a drive then browses the real host folders and can create/select a workspace. The PC's `http://127.0.0.1:<port>` page remains on DeepSeek Harness's original native OS folder dialog.
 4. Same URL works away from home: Tailscale relays through DERP when there is no direct path.
 
 > The phone device does **not** need to run DSH or any plugin — it only needs Tailscale membership.
 
 ## Phone layout adaptation
 
-Reaching DSH from the phone is only half of *using* DSH from the phone. The shipped GUI is a desktop three-column shell (it wants a 280px sidebar plus a 748px chat column, ~1060px total), so below that width panels squeeze each other and `nowrap` content paints over its neighbours. This plugin therefore also ships a browser half, `lib/client.js`, which is **a stylesheet, not a component**: DSH's own React components, state and buttons stay in charge.
+Reaching DSH from the phone is only half of *using* DSH from the phone. The shipped GUI is a desktop three-column shell (it wants a 280px sidebar plus a 748px chat column, ~1060px total), so below that width panels squeeze each other and `nowrap` content paints over its neighbours. This plugin therefore also ships a browser half, `lib/client.js`: mobile-fit CSS leaves DSH's existing React shell in charge, while one remote-only directory-flow component supplies the phone workspace picker.
 
-- Everything lives inside one `@media (max-width: 820px)` block, so a desktop browser is bit-for-bit unaffected.
+- The whole client half mounts only on a non-loopback page (`ctx.connection.isLoopback === false`, the phone's Tailscale URL): the PC's `127.0.0.1` page never mounts the stylesheet, the marquee watcher, or the directory flow, at any window size. Within the phone page, every layout rule lives inside `@media (max-width: 820px)`, so desktop-width tablets are untouched too.
 - The collapsed sidebar rail goes to zero width and DSH's own toggle is floated out as a round opener in the top-left corner; the expanded sidebar becomes an overlay drawer. No state is cloned — the button still calls DSH's `toggleSidebar()`.
 - A small JavaScript half handles what CSS cannot express: a keyboard-aware `interactive-widget=resizes-content` viewport, a marquee for model names too long to fit, and two focus guards that stop a sidebar tap or the command button from opening the soft keyboard over the content.
 
-Load any page with **`?nomobilefit=1`** to disable the whole adaptation. That is the reliable way to tell a layout fault in this sheet apart from one in DSH itself: open the same URL with and without the flag and compare.
+Load the phone page with **`?nomobilefit=1`** to skip the mobile-fit half (the phone's directory picker stays — it is the remote functionality itself). That is the reliable way to tell a layout fault in this sheet apart from one in DSH itself: open the same URL with and without the flag and compare.
 
 ### Selector strategy (read before editing `lib/client.js`)
 
@@ -154,7 +154,7 @@ The plugin is configured through the patch layer (`cordis.patch.yml`), overridab
 
 | key | default | meaning |
 |---|---|---|
-| `enabled` | `true` | Master switch. `false` keeps DSH on loopback only. |
+| `enabled` | `true` | Master switch. `false` keeps DSH on loopback only — no Serve route, no trust-fence entry, and not even the plugin's `/tailscale-serve` RPC channel. |
 | `https` | `true` | Use Tailscale HTTPS on port 443. `false` asks Tailscale explicitly for plain HTTP on port 80; use that only on a trusted tailnet and only when TLS is genuinely undesirable. |
 | `hostname` | *(auto-detected)* | Optional `<machine>.<tailnet>.ts.net` URL hint used before the Serve route can be read. Normally omit it; the verified route's actual host always wins, and a stale/mismatched value produces a warning. |
 | `keepOnExit` | `false` | Keep the plugin-applied root handler after DSH exits. With the default, a normal shutdown removes only the route this process proved it added; it does not restore or replace the rest of Serve. |
@@ -178,6 +178,8 @@ dsh web --trusted-host <machine>.<tailnet>.ts.net
 
 The fence is a DNS-rebinding defense, **not** an auth layer. This plugin only adds the tailnet hostname to the trusted-host list; DSH itself still binds `127.0.0.1` and the whole exposure is gated by Tailscale's tailnet membership, ACLs, and (by default) TLS.
 
+Concretely, on the DSH builds this plugin runs against (verified on `0.1.1-rc.2`), the plugin's `/tailscale-serve` channel carries **no user-level authentication** — no cookies, no session, no 401 layer. The fence blocks DNS-rebinding and cross-site browser requests only. Any client on the tailnet that can reach the Serve port and present the tailnet hostname as its `Host` header — including non-browser tools — can call `listDrives`/`listDirectory`/`createDirectory` and the proxied settings slice directly. Tailnet membership, ACLs, and TLS are the entire security model for everything this plugin exposes.
+
 DSH rc.8 has a second, deliberately narrower boundary for configuration-plane methods. Calls including `host.pickDirectory`, `host.openPath`, `settings.*`, `credentials.*`, and `llm.discoverModels` require a loopback same-origin request and ignore the ordinary trusted-host list. The already-configured, non-secret model catalog (`llm.providers`/`llm.models`) is a different browser-safe surface; it does not make provider settings or model discovery actions remotely writable. Therefore this error is expected from a `*.ts.net` page when the native picker is selected:
 
 ```text
@@ -187,12 +189,12 @@ HTTP 403
 
 Adding another `--trusted-host`, weakening a Tailscale ACL, changing `hostname`, or retrying Serve does not unlock those methods. The supported no-source-code split is:
 
-- **Folders and workspaces:** this package's `cordis.patch.yml` disables DSH's automatic/native picker, mounts the browse Host backend, and lets this plugin's client bundle occupy both workspace directory-flow slots. On Windows the picker first shows a virtual **This PC** drive list; only an actual drive/root or directory is sent to `host.listDirectory`, `host.createDirectory`, or `workspace.create`. The virtual label itself is never submitted as a filesystem path. Restart DSH after installing or changing the patch. This selection applies to the whole web profile, so the PC browser also gets the same in-page browser instead of the Windows/macOS native dialog.
-- **Credentials, provider settings, and model discovery:** open the loopback UI on the host PC (`http://127.0.0.1:3080`, or the port printed by DSH) and perform those administrative actions there. Once configured, the remote page may still read the non-secret model catalog and use the selected model, but it cannot use this plugin to bypass the loopback-only configuration methods.
+- **Folders and workspaces:** DSH's stock `directory-picker-auto` remains enabled, so the loopback PC page keeps the native Windows/macOS dialog. Only a non-loopback page (the phone's Tailscale URL) shadows the two client directory-flow slots. Its `listDrives`, `listDirectory`, and `createDirectory` operations use this plugin's own `trusted-host` RPC channel; the final real path is still handed to DSH's ordinary `workspace.create`. On Windows the phone first sees a virtual **This PC** drive list. The virtual label itself is never submitted as a filesystem path.
+- **A narrow, explicit settings slice:** the phone may (1) run model discovery (`llm.discoverModels`), (2) read the settings describe view (`settings.describe`, secrets redacted by the provider — only presence flags cross), (3) write exactly the `agent-presets` namespace (`settings.update` scoped to `ns: "agent-presets"`) so the Settings page's **Agent preset** picker works from the phone, and (4) save provider edits from the **模型配置 / Models** page — `settings.mutate` restricted to `llm-*` provider namespaces, plus `credentials.describe` (configured flags only, no values) and `credentials.set`/`credentials.unset` for env-var-shaped API-key refs (`DEEPSEEK_API_KEY`-style names). This slice is served by this plugin's own `trusted-host` RPC channel, whose only audience is the tailnet page (Tailscale membership + ACLs + TLS). Everything else in the configuration plane — other settings namespaces, permission rows — stays loopback-only; perform those administrative actions on the host PC (`http://127.0.0.1:3080`, or the port printed by DSH). Once configured, the remote page may still read the non-secret model catalog and use the selected model.
 
-The browse picker is functional access, not a filesystem sandbox: Windows starts from its ready drive roots; other hosts, or a failed/empty drive probe, fall back to the host account's home directory. It accepts absolute paths and has no deployment-level browse-root restriction. Restrict the Tailscale ACL to devices/users you trust with DSH and with visibility into that account's directories.
+The phone picker is functional access, not a filesystem sandbox: Windows starts from its ready drive roots; other hosts, or a failed/empty drive probe, fall back to the host account's home directory. It accepts fully qualified paths and has no deployment-level browse-root restriction. Restrict the Tailscale ACL to devices/users you trust with DSH and with visibility into that account's directories.
 
-If directory browsing still invokes `pickDirectory`, inspect the active web profile's final composition and confirm that `directory-picker` is disabled, `directory-picker-browse` is mounted, and the `dsh-tailscale-serve` client bundle is active. Reinstall/reconcile the plugin and restart DSH if the profile was generated before these rows were added.
+If the phone still invokes `pickDirectory`, confirm that it is using the `*.ts.net` URL rather than `127.0.0.1`, that the `dsh-tailscale-serve` client bundle is active, and that the current plugin version exposes `/tailscale-serve/listDrives`. The final composition should keep the stock `directory-picker` entry enabled; do not globally replace it with the browse backend, because that also changes the PC.
 
 ## How it works
 
@@ -202,6 +204,19 @@ If directory browsing still invokes `pickDirectory`, inspect the active web prof
 - **Windows LocalAPI transport**: Tailscale's protected named pipe requires the client to request the `Identification` impersonation level. Node's ordinary `socketPath` transport does not set it, so the plugin uses a bundled Windows PowerShell/.NET bridge only for the local pipe connection. This preserves Tailscale's authentication check; it does not elevate the process, change policy, or bypass LocalAPI authorization. Unix-like systems continue to use the native Unix socket directly.
 - **Serve**: HTTPS mode runs an explicit `tailscale serve --bg --yes --https=443 <target>`; HTTP mode uses `--http=80`. The target is always the actual DSH listener, including its host, so an IPv6-only or mismatched bind cannot silently become a successful 502 endpoint. After the CLI exits 0, the plugin re-reads `Web/TCP`, performs a final fresh route/listener/Funnel check immediately before announcement, derives the endpoint from the actual route rather than the hostname hint, and verifies the exact proxy route. If Funnel became enabled during that window, the plugin removes only its own handler with an ETag-guarded safety rollback and does not announce the endpoint.
 - **Trust fence**: it pushes the resolved tailnet hostname (`<machine>.<tailnet>.ts.net`) into `webRuntime.trustedHosts`, which the already-applied `/api` fence reads per request (same array reference).
+- **Split directory picker**: the PC keeps DSH's native directory-picker backend and client. On non-loopback pages the plugin registers a directory-flow occupant whose bundle loads after DSH's stock picker; the runtime assigns each later registration on a single slot a lower automatic shadowing priority, so the plugin's flow wins there and the native client stays on the loopback PC page. Directory enumeration and child creation travel over `/tailscale-serve` with `trusted-host` authority, strict fully-qualified path checks, and a 1,000-entry bound.
+- **Static transport enhancement**: the plugin wraps the webServer's request
+  listener and serves `/assets` and `/plugins` GET responses with gzip
+  compression, an ETag, and caching headers — fingerprinted names (including
+  every `?rev=` plugin bundle URL) are `immutable`, the rest revalidate with
+  a 304. DSH ships neither, so over a DERP relay the phone re-downloaded the
+  full ~4.4MB boot payload on every page load; with the enhancement the first
+  load transfers ~1.1MB and repeat loads are near-zero. The enhancement gates
+  on the request's Host header: only non-loopback (tailnet) requests get it,
+  so the PC's `127.0.0.1` browser still receives DSH's byte-exact stock
+  responses. Response bodies are byte-identical, `/api` and event streams
+  pass through untouched, and the enhancer runs only while the plugin is
+  enabled.
 - **Cleanup**: on normal dispose, it removes only the verified `/` handler owned by this process. The update is built from the latest config and posted with `If-Match: <ETag>`; a concurrent change returns HTTP 412 and is retried from the new state, so unrelated routes are preserved rather than replaced. If the root handler or listener mode changed, cleanup stops without a write. If same-port Funnel state changed, cleanup performs a handler-only safety removal that preserves the current TCP/Funnel listener; it never disables the other process's Funnel. `keepOnExit:true` skips this removal.
 
 A hard crash or forced process termination cannot run the disposer. Inspect
@@ -218,8 +233,8 @@ intend to remove every node-level Serve handler.
 |---|---|
 | `tailscale-serve: warning: tailscale CLI not found` | Tailscale is installed somewhere unusual. Set `serveArgs` is not enough — either add the CLI's directory to PATH or open an issue with your install path. |
 | Phone page loads but chat is dead / "not real-time" | The `/api` fence was rejecting the host. Expected with the old plugin code — **restart DSH** so the trust-fence injection runs, and look for the `added ... trust fence` startup line. |
-| `transport failure for /api/host, pickDirectory` / HTTP 403 | DSH selected its native, loopback-only picker. Confirm the browse-picker rows from this package are present in the active web profile, then reconcile/reinstall the plugin and restart DSH. Do not try to solve this with `--trusted-host`. |
-| Models/settings page or model discovery action fails with HTTP 403 | DSH rc.8 keeps provider settings, credentials, settings mutations, and `llm.discoverModels` loopback-only. Configure them from the host's `127.0.0.1` UI; the ordinary non-secret model catalog is separate. |
+| `transport failure for /api/host, pickDirectory` / HTTP 403 on the phone | The remote directory-flow client did not load, so the stock native flow won. Confirm the phone uses the `*.ts.net` URL, reconcile/reinstall this plugin, restart DSH, and verify `/tailscale-serve/listDrives` is available. Keep DSH's stock `directory-picker` enabled; do not solve this by globally replacing the PC picker. |
+| Models/settings page or model discovery action fails with HTTP 403 | DSH keeps provider settings, credentials, settings mutations, and `llm.discoverModels` loopback-only. The plugin proxies a narrow slice over its trusted channel: model discovery, the read-only settings describe view, `settings.update` for the `agent-presets` namespace, and the full model-config save path (`settings.mutate` on `llm-*` namespaces + `credentials.set`/`unset`/`describe`). Anything else must be configured from the host's `127.0.0.1` UI. **Restart DSH after updating the plugin so the server-side endpoints load.** |
 | `tailscale serve status` says `Access is denied` on Windows | The current account may query general node status but cannot inspect/manage Serve. Run `dsh web` from an elevated/authorized account or configure an operator supported by that Tailscale release. |
 | `tailscale serve status --json` prints `{}` | This is a valid empty Serve configuration, not an error. Start/restart `dsh web`; the plugin should create and then verify the DSH route. |
 | Warning mentions `Unable to impersonate using a named pipe until data has been read` | That came from an older plugin build using Node's plain Windows pipe transport. Reinstall/reconcile this package and fully restart DSH so the bundled `Identification`-level transport is loaded. |
@@ -249,4 +264,4 @@ MIT. See `LICENSE` for the full text.
 
 ## Publishing
 
-No canonical source repository is present in this directory or published for this package name, so `repository`, `homepage`, and `bugs` are intentionally not guessed. Create the public repository and add those three URLs to `package.json` before the first registry release.
+Source lives at [github.com/RexVane/dsh-tailscale-serve](https://github.com/RexVane/dsh-tailscale-serve) — private while the QA tool defaults embed this deployment's tailnet hostname; parameterize those before making it public. `repository`, `homepage`, and `bugs` in `package.json` already point at it.

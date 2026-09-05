@@ -11,9 +11,10 @@
  *
  * Sections:
  *   1. The plugin loads under a stub browser and produces its stylesheet.
- *   2. The generated CSS is brace-balanced and every block has declarations.
- *   3. No stray backtick survived inside the CSS literal (a real mistake this
- *      file has seen: it ends the template early and breaks the whole plugin).
+ *   2. The generated CSS is brace-balanced and every block has declarations
+ *      (the main sheet and the picker's own sheet).
+ *   3. No stray backtick survived inside either CSS literal (a real mistake
+ *      this file has seen: it ends the template early and breaks the plugin).
  *   4. Class selectors contain no build hashes, and every stable token still
  *      occurs in the bundles DSH serves.
  *   5. Regression: the marquee does not restart on a steady label.
@@ -43,7 +44,15 @@ const fail = (m) => { failures += 1; console.log(`  FAIL  ${m}`); };
 const warn = (m) => { warnings += 1; console.log(`  WARN  ${m}`); };
 const pass = (m) => { console.log(`  ok    ${m}`); };
 
-const noopEvents = { addEventListener() {}, removeEventListener() {} };
+	const noopEvents = { addEventListener() {}, removeEventListener() {} };
+	// A stand-in page fetch: the settings proxy must REPLACE it on a phone page.
+	const pageFetch = async () => { throw new Error("stub page fetch must not be reached by proxied calls"); };
+
+/**
+ * The plugin mounts nothing unless the page is non-loopback (the phone's
+ * Tailscale URL) — this stub context is what a PC page never provides.
+ */
+const PHONE_CTX = { connection: { isLoopback: false }, effect(f) { f(); } };
 
 /**
  * Load the plugin against a stub browser and return what it registered.
@@ -56,8 +65,9 @@ function loadPlugin(overrides = {}) {
 	const base = {
 		window: {
 			__ModuleLoader__: { load: (entry) => { captured = entry; } },
-			location: { search: "" },
+			location: { search: "", href: "https://phone.example.ts.net/" },
 			matchMedia: () => ({ matches: true, ...noopEvents }),
+			fetch: pageFetch,
 			...noopEvents,
 		},
 		document: {
@@ -81,7 +91,7 @@ function loadPlugin(overrides = {}) {
 	};
 	const run = new Function(...Object.keys(sandbox), source);
 	run(...Object.values(sandbox));
-	return { entry: captured, styleNode };
+	return { entry: captured, styleNode, sandboxWindow: sandbox.window };
 }
 
 /* ---------- 1. load under a stub browser -------------------------------- */
@@ -97,7 +107,7 @@ try {
 		const exported = entry.factory();
 		if (typeof exported.apply !== "function") fail("factory did not export apply()");
 		else {
-			exported.apply();
+			exported.apply(PHONE_CTX);
 			css = styleNode.textContent;
 			if (css.length === 0) fail("apply() mounted no stylesheet text");
 			else pass(`stylesheet produced (${css.length} chars)`);
@@ -107,9 +117,21 @@ try {
 	fail(`plugin threw while loading: ${error.message}`);
 }
 
-/* ---------- 1b. drive-aware directory flow ----------------------------- */
+// The PC guarantee: a loopback page mounts nothing at all, so installing the
+// plugin cannot change the local DSH at any window width.
+try {
+	const { entry, styleNode } = loadPlugin();
+	const exported = entry.factory();
+	exported.apply({ connection: { isLoopback: true } });
+	if (styleNode.textContent.length !== 0) fail("stylesheet mounted on a loopback PC page");
+	else pass("loopback PC page mounts nothing — local DSH stays stock");
+} catch (error) {
+	fail(`loopback no-op check threw: ${error.message}`);
+}
 
-console.log("\n[1b] drive-aware directory flow is safe");
+/* ---------- 1b. remote-only drive-aware directory flow ----------------- */
+
+console.log("\n[1b] remote-only drive-aware directory flow is safe");
 
 function fakeReact() {
 	const state = [];
@@ -147,6 +169,10 @@ function walkTree(node, visit) {
 	walkTree(node.props?.children, visit);
 }
 
+async function flushMicrotasks(turns = 8) {
+	for (let index = 0; index < turns; index += 1) await Promise.resolve();
+}
+
 try {
 	const react = fakeReact();
 	const slots = [];
@@ -154,34 +180,90 @@ try {
 		Modal: "Modal", Button: "Button", IconChevronRightOutline14: "Chevron",
 		IconFolderClose16: "Folder", IconPlusOutline16: "Plus",
 	};
-	const { entry } = loadPlugin({
+	const { entry, sandboxWindow } = loadPlugin({
 		navigator: { language: "zh-CN" },
 	});
 	const exported = entry.factory((name) => name === "react" ? react : primitives);
-	const ctx = {
-		connection: { rpc: { call: async () => ({ ok: true, value: { drives: ["B:\\", "C:\\", "D:\\"] } }) } },
-		workspaces: {
-			listDirectory: async (path) => ({ path, home: "C:\\Users\\u", crumbs: [], entries: [], truncated: false }),
-			createDirectory: async (path, name) => `${path}${name}`,
+	const localSlots = [];
+	const makeSlots = (target) => ({
+		inject(_name, factory) {
+			const result = factory();
+			if (result?.next) for (const _value of result) { /* registrations happen eagerly */ }
+		},
+		register(options, Component) { target.push({ options, Component }); return () => {}; },
+	});
+	exported.apply({
+		connection: {
+			isLoopback: true,
+			rpc: { call: async () => { throw new Error("loopback must use the native picker"); } },
 		},
 		effect(factory) { factory(); },
-		slots: {
-			inject(_name, factory) {
-				const result = factory();
-				if (result?.next) for (const _value of result) { /* registrations happen eagerly */ }
-			},
-			register(options, Component) { slots.push({ options, Component }); return () => {}; },
+		slots: makeSlots(localSlots),
+	});
+	if (localSlots.length !== 0) fail("loopback desktop registered the custom directory flow");
+	else pass("loopback desktop leaves DSH's native directory flow untouched");
+
+	const rpcCalls = [];
+	const directoryListings = {
+		"D:\\": { path: "D:\\", home: "C:\\Users\\u", crumbs: [{ name: "D:\\", path: "D:\\", hidden: false }], entries: [{ name: "AIApp", path: "D:\\AIApp", hidden: false }, { name: "NodeJs", path: "D:\\NodeJs", hidden: false }], truncated: false },
+	};
+	// When set, listing this path never resolves unless aborted — the
+	// mid-flight navigation regression needs a request that can be abandoned.
+	let hangingPath = null;
+	const ctx = {
+		connection: {
+			isLoopback: false,
+			rpc: { call: async (channel, endpoint, payload, signal) => {
+				rpcCalls.push({ channel, endpoint, payload });
+				if (endpoint === "listDrives") return { ok: true, value: { drives: ["B:\\", "C:\\", "D:\\"] } };
+				if (endpoint === "listDirectory") {
+					if (hangingPath !== null && payload?.path === hangingPath) {
+						return new Promise((_resolve, reject) => {
+							signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+						});
+					}
+					return { ok: true, value: directoryListings[payload?.path] ?? { path: payload?.path ?? "C:\\Users\\u", home: "C:\\Users\\u", crumbs: [], entries: [], truncated: false } };
+				}
+				if (endpoint === "createDirectory") return { ok: true, value: { path: `${payload.path}${payload.name}` } };
+				throw new Error(`unexpected endpoint ${endpoint}`);
+			} },
 		},
+		effect(factory) { factory(); },
+		slots: makeSlots(slots),
 	};
 	exported.apply(ctx);
 	assert.equal(slots.length, 2);
+	// Declaration consistency only: the client runner overrides the priority of
+	// every non-chain slot with its own allocatePriority, so what shadows the
+	// stock picker is this bundle registering after it — not this number. The
+	// live outcome is guarded by tools/mobile-qa.mjs QA-04 (the dialog that
+	// appears on a remote page must be this plugin's picker).
+	if (slots.some((slot) => slot.options.priority !== -100)) fail("the two directory-flow registrations disagree on the declared priority");
+	else pass("both directory-flow slots carry consistent declarations (shadowing rides on load order)");
+	// The settings plane only works if the proxy actually REPLACES window.fetch —
+	// defining the router without assigning it used to leave every proxied call
+	// hitting the raw /api fence (HTTP 403 on the phone).
+	if (typeof sandboxWindow.fetch !== "function" || !String(sandboxWindow.fetch).includes("/api/settings.describe")) fail("the settings plane proxy did not wrap window.fetch — describe would 403 on the phone");
+	else pass("settings plane proxy wraps window.fetch");
+	// The discover route must match DSH's actual wire shape (callUnary POSTs
+	// /api/llm.discoverModels with method "llm.discoverModels") — a mismatch
+	// silently falls through to the raw loopback fence and 403s on the phone.
+	{
+		rpcCalls.length = 0;
+		await sandboxWindow.fetch("/api/llm.discoverModels", {
+			method: "POST",
+			body: JSON.stringify({ type: "client-request", rpcId: "qa", method: "llm.discoverModels", payload: { settingsNs: "llm-deepseek" } }),
+		});
+		const call = rpcCalls.find((c) => c.endpoint === "discoverModels");
+		if (!call || call.channel !== "/tailscale-serve") fail("the discoverModels proxy route does not match DSH's wire shape — discovery would 403 on the phone");
+		else pass("discoverModels proxy route matches DSH's wire shape");
+	}
 	const injected = slots[0].options.inject();
 	let picked = null;
 	const props = { open: true, busy: false, onPicked: (path) => { picked = path; }, onCancel() {}, onError() {}, ...injected };
 	let tree = react.render(slots[0].Component, props);
 	react.flushEffects();
-	await Promise.resolve();
-	await Promise.resolve();
+	await flushMicrotasks();
 	tree = react.render(slots[0].Component, props);
 	const buttons = [];
 	walkTree(tree, (node) => { if (node.type === "button" || node.type === "Button") buttons.push(node); });
@@ -205,13 +287,72 @@ try {
 	open?.props.onClick?.();
 	if (picked !== null) fail(`virtual drive root submitted ${JSON.stringify(picked)}`);
 	else pass("Open cannot submit the virtual This PC root");
-	const calls = [];
-	ctx.workspaces.listDirectory = async (path) => { calls.push(path); return { path, home: "C:\\Users\\u", crumbs: [], entries: [], truncated: false }; };
+	rpcCalls.length = 0;
 	driveButtons.find((button) => text(button) === "D:\\")?.props.onClick?.();
-	if (calls[0] !== "D:\\") fail(`D:\\ did not browse the real root (got ${JSON.stringify(calls[0])}); buttons=${buttons.map(text).join(" | ")}`);
-	else pass('clicking D:\\ calls listDirectory("D:\\\\")');
+	const directoryCall = rpcCalls.find((call) => call.endpoint === "listDirectory");
+	if (directoryCall?.channel !== "/tailscale-serve" || directoryCall?.payload?.path !== "D:\\") fail(`D:\\ did not use the private directory RPC; buttons=${buttons.map(text).join(" | ")}`);
+	else pass('clicking D:\\ calls the private listDirectory RPC with "D:\\\\"');
+	// After the RPC resolves, re-render and verify the folder list appears.
+	await flushMicrotasks();
+	tree = react.render(slots[0].Component, props);
+	const folderButtons = [];
+	walkTree(tree, (node) => { if (node.type === "button" || node.type === "Button") folderButtons.push(node); });
+	const folderNames = folderButtons.map(text).filter((t) => t === "AIApp" || t === "NodeJs");
+	if (folderNames.length !== 2) fail(`clicking D:\\ did not render the folder list; found=${folderNames.join(",") || "(none)"}`);
+	else pass("clicking D:\\ renders the folder list (AIApp, NodeJs)");
+
+	// Regression: a truncated listing must reach the user instead of silently
+	// hiding everything past the server's 1,000-entry bound.
+	directoryListings["D:\\NodeJs"] = { path: "D:\\NodeJs", home: "C:\\Users\\u", crumbs: [{ name: "D:\\", path: "D:\\", hidden: false }, { name: "NodeJs", path: "D:\\NodeJs", hidden: false }], entries: [{ name: "many", path: "D:\\NodeJs\\many", hidden: false }], truncated: true };
+	folderButtons.find((button) => text(button) === "NodeJs")?.props.onClick?.();
+	await flushMicrotasks();
+	tree = react.render(slots[0].Component, props);
+	const notices = [];
+	walkTree(tree, (node) => { if (node.props?.className === "dsh-ts-picker-truncated") notices.push(node); });
+	if (notices.length !== 1) fail("a truncated listing rendered no truncation notice");
+	else pass("a truncated listing surfaces a truncation notice");
+
+	// Regression: navigating back to This PC while a listing is in flight must
+	// drop the aborted request silently — the pre-fix code let its rejection
+	// pass the seq guard, painted an abort error over the drive grid, and (with
+	// the guard fixed alone) would have left the spinner up forever.
+	hangingPath = "D:\\AIApp";
+	const thisPcButton = () => {
+		const found = [];
+		walkTree(tree, (node) => { if (node.type === "button" && text(node) === "此电脑") found.push(node); });
+		return found[0];
+	};
+	folderButtons.find((button) => text(button) === "AIApp")?.props.onClick?.();
+	await flushMicrotasks();
+	tree = react.render(slots[0].Component, props);
+	thisPcButton()?.props.onClick?.();
+	await flushMicrotasks();
+	tree = react.render(slots[0].Component, props);
+	const errorNodes = [];
+	let driveGridBack = false;
+	walkTree(tree, (node) => {
+		if (node.props?.className === "dsh-ts-picker-error") errorNodes.push(node);
+		if (node.props?.className === "dsh-ts-picker-drive-grid") driveGridBack = true;
+	});
+	hangingPath = null;
+	if (errorNodes.length > 0) fail("returning to This PC mid-listing surfaced the abort as an error banner");
+	else if (!driveGridBack) fail("This PC view did not return after a mid-listing abort (spinner stuck?)");
+	else pass("returning to This PC mid-listing drops the aborted request silently");
 } catch (error) {
 	fail(`drive-aware flow verification threw: ${error.message}`);
+}
+
+/* ---------- 1c. extract the picker stylesheet literal ------------------- */
+
+// The picker ships its own template literal with the same failure modes as the
+// main sheet, so sections 2 and 3 run the same structural checks over both.
+let pickerCss = null;
+{
+	const pickerStart = source.indexOf("function mountDirectoryPickerStyle");
+	const pickerOpen = pickerStart < 0 ? -1 : source.indexOf("style.textContent = `", pickerStart);
+	const pickerClose = pickerOpen < 0 ? -1 : source.indexOf("`;", pickerOpen);
+	if (pickerStart < 0 || pickerOpen < 0 || pickerClose < 0) fail("could not locate the picker stylesheet template literal");
+	else pickerCss = source.slice(pickerOpen + "style.textContent = `".length, pickerClose);
 }
 
 /* ---------- 2. CSS structure ------------------------------------------- */
@@ -244,6 +385,22 @@ if (css.length > 0) {
 	else pass("every rule is inside the mobile @media guard");
 }
 
+if (pickerCss !== null) {
+	let depth = 0;
+	let minDepth = 0;
+	for (const ch of pickerCss) {
+		if (ch === "{") depth += 1;
+		else if (ch === "}") { depth -= 1; if (depth < minDepth) minDepth = depth; }
+	}
+	if (depth !== 0) fail(`picker stylesheet unbalanced braces: ends at depth ${depth}`);
+	else if (minDepth < 0) fail("picker stylesheet: a closing brace appears before its opener");
+	else pass("picker stylesheet braces balanced");
+
+	const empty = [...pickerCss.matchAll(/([^{}]+)\{\s*\}/g)].map((m) => m[1].trim().split("\n").pop().trim());
+	if (empty.length > 0) fail(`picker stylesheet has ${empty.length} empty block(s): ${empty.slice(0, 3).join(" | ")}`);
+	else pass("picker stylesheet has no empty rule blocks");
+}
+
 /* ---------- 3. CSS literal integrity ----------------------------------- */
 
 console.log("\n[3] CSS literal integrity in the source");
@@ -256,6 +413,13 @@ else {
 	const stray = [...body].filter((c) => c === "`").length;
 	if (stray > 0) fail(`${stray} stray backtick(s) inside the CSS literal — it ends early`);
 	else pass("no stray backticks inside the CSS literal");
+}
+
+if (pickerCss === null) fail("could not locate the picker stylesheet template literal");
+else {
+	const stray = [...pickerCss].filter((c) => c === "`").length;
+	if (stray > 0) fail(`${stray} stray backtick(s) inside the picker stylesheet literal — it ends early`);
+	else pass("no stray backticks inside the picker stylesheet literal");
 }
 
 /* ---------- 4. selectors still match what DSH serves -------------------- */
@@ -342,7 +506,7 @@ try {
 			querySelectorAll: (sel) => (sel.includes("_triggerLabel") ? [label] : []),
 		},
 	});
-	entry.factory().apply();
+	entry.factory().apply(PHONE_CTX);
 
 	const afterFirst = ops.length;
 	if (!ops.includes("+data-dsh-marquee")) fail("an overflowing label was never marked");
@@ -385,7 +549,7 @@ try {
 			querySelector: (sel) => (sel.includes("viewport") ? meta : null),
 		},
 	});
-	entry.factory().apply();
+	entry.factory().apply(PHONE_CTX);
 
 	if (meta.content.includes("interactive-widget")) fail("viewport was tuned while past the breakpoint");
 	else pass("landscape load leaves the page viewport untouched");

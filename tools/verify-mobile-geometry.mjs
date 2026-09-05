@@ -14,8 +14,12 @@
  *
  * Usage:
  *   node tools/verify-mobile-geometry.mjs [origin] [--keep-shots]
- *   node tools/verify-mobile-geometry.mjs http://127.0.0.1:3080
- *   node tools/verify-mobile-geometry.mjs http://127.0.0.1:3080 --no-sandbox
+ *   node tools/verify-mobile-geometry.mjs https://<machine>.<tailnet>.ts.net
+ *   node tools/verify-mobile-geometry.mjs https://<machine>.<tailnet>.ts.net --no-sandbox
+ *
+ * The default origin is the tailnet URL on purpose: the mobile-fit client half
+ * mounts only on non-loopback pages, so a loopback origin now measures DSH's
+ * stock (unadapted) layout by design.
  */
 
 import { spawn } from "node:child_process";
@@ -26,7 +30,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
-const origin = args.find((a) => a.startsWith("http")) ?? "http://127.0.0.1:3080";
+const origin = args.find((a) => a.startsWith("http")) ?? "https://windows.tail31253f.ts.net/";
 const keepShots = args.includes("--keep-shots");
 // Opt-in only: some managed/CI Windows sessions terminate headless Chrome as
 // soon as CDP enables the page domain unless the browser sandbox is disabled.
@@ -248,6 +252,9 @@ const browserArgs = [
 	`--remote-debugging-port=${port}`,
 	`--user-data-dir=${profile}`,
 	"--no-first-run", "--no-default-browser-check", "--disable-gpu",
+	// Tailnet traffic must ride the local Tailscale interface; a system proxy
+	// (Clash & co.) cannot deliver *.ts.net and just closes the connection.
+	"--no-proxy-server",
 	"--hide-scrollbars", "about:blank",
 ];
 if (noSandbox) browserArgs.splice(-1, 0, "--no-sandbox");
@@ -296,8 +303,14 @@ try {
 	pass("DSH shell rendered in headless browser");
 
 	const sheet = await cdp.eval(() => [...document.querySelectorAll("style")].some((s) => s.id === "dsh-tailscale-serve-mobile-fit"));
-	if (!sheet) fail("the mobile-fit stylesheet is not present — plugin not loaded in this DSH");
-	else pass("mobile-fit stylesheet is mounted by the running DSH");
+	const loopbackOrigin = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(new URL(origin).hostname);
+	if (!sheet && loopbackOrigin) {
+		fail("the mobile-fit stylesheet is absent on a loopback origin — expected since 0.1.2 (the PC page mounts nothing by design); run against the tailnet URL to verify the phone layout");
+	} else if (!sheet) {
+		fail("the mobile-fit stylesheet is not present — plugin not loaded in this DSH");
+	} else {
+		pass("mobile-fit stylesheet is mounted by the running DSH");
+	}
 
 	if (keepShots) mkdirSync(shotDir, { recursive: true });
 

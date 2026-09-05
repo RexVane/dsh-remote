@@ -153,6 +153,8 @@ Two complementary suites, both reproducible.
 
 ```
 [1] loads under a stub browser, produces a 34,788-char stylesheet
+[1b] loopback leaves the native directory flow untouched; a non-loopback page
+     shadows it with the drive-aware flow and uses the plugin's private RPC
 [2] braces balanced; no empty blocks; no declarations outside a block;
     103 rules in 4 @media blocks; every rule inside the mobile guard
 [3] no stray backtick inside the CSS literal
@@ -163,6 +165,13 @@ Two complementary suites, both reproducible.
 
 PASS — 0 failures, 0 warnings
 ```
+
+The directory-flow check is intentionally split by origin rather than viewport:
+the PC's loopback page keeps DeepSeek Harness's native picker even in a narrow
+window, while the phone's Tailscale page keeps the web picker across rotation.
+The Host retains its native directory-picker capability; remote list/create
+operations use this plugin's own trusted RPC instead of changing the global
+DSH picker backend.
 
 Both regression sections were **confirmed to fail against the pre-fix code** before being accepted — a check nobody has watched fail is not evidence. The verifier is overridable via `MOBILE_FIT_SOURCE` for exactly that purpose.
 

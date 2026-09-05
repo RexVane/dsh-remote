@@ -17,3 +17,11 @@ coverage/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Third-party tool state (not project code).
+.freebuff/
+
+# Verification screenshots: only the two referenced by MOBILE-FIT-AUDIT.md are kept.
+gui-test-screenshots/*
+!gui-test-screenshots/360x780-verified.png
+!gui-test-screenshots/390x844-verified.png

@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+	explorerEntryCompare,
 	applyWithDeps,
 	buildServeArgs,
 	canonicalServeConfig,
+	createHostDirectory,
+	fullyQualifiedDirectoryPath,
+	installStaticEnhancer,
+	listHostDirectory,
 	listWindowsDrives,
 	permissionDenied,
 	proxyTargetForBind,
-	registerDriveRpc,
+	registerDirectoryRpc,
 	resolveConfiguredUrl,
 	resolveServeUrl,
 	selectTailscaleCandidate,
@@ -24,6 +29,7 @@ function makeContext(overrides = {}) {
 	const ctx = {
 		webServer: { port: 3080, host: "127.0.0.1" },
 		webRuntime: { trustedHosts: [] },
+		connection: { trustedHosts: [], rpc: { handle: () => "drive-rpc-disposer" } },
 		effect(factory) { disposer = factory(); },
 		...overrides,
 	};
@@ -104,9 +110,9 @@ function commonDeps(logs, storeFactory, run, selfInfo, extra = {}) {
 	};
 }
 
-test("drive enumeration is empty outside Windows without probing the filesystem", () => {
+test("drive enumeration is empty outside Windows without probing the filesystem", async () => {
 	let statCalls = 0;
-	const drives = listWindowsDrives({
+	const drives = await listWindowsDrives({
 		platform: "linux",
 		stat: () => {
 			statCalls += 1;
@@ -117,10 +123,10 @@ test("drive enumeration is empty outside Windows without probing the filesystem"
 	assert.equal(statCalls, 0);
 });
 
-test("Windows drive enumeration returns only ready directory roots", () => {
+test("Windows drive enumeration returns only ready directory roots", async () => {
 	const ready = new Set(["B:\\", "D:\\"]);
 	const probed = [];
-	const drives = listWindowsDrives({
+	const drives = await listWindowsDrives({
 		platform: "win32",
 		stat: (root) => {
 			probed.push(root);
@@ -135,7 +141,127 @@ test("Windows drive enumeration returns only ready directory roots", () => {
 	assert.equal(probed.at(-1), "Z:\\");
 });
 
-test("drive RPC is registered behind trusted-host authority and returns enumerated roots", async () => {
+test("a drive probe that misses its deadline is dropped, and its late failure stays handled", async () => {
+	const started = Date.now();
+	const drives = await listWindowsDrives({
+		platform: "win32",
+		probeTimeoutMs: 15,
+		stat: (root) => {
+			if (root === "C:\\") {
+				// Loses the race, then rejects late: the race already attached a
+				// handler, so this must surface as an unhandled rejection — which
+				// fails the suite — rather than pass silently.
+				return new Promise((_, reject) => {
+					setTimeout(() => reject(new Error("late probe failure")), 60);
+				});
+			}
+			return Promise.reject(Object.assign(new Error("drive unavailable"), { code: "ENOENT" }));
+		},
+	});
+	assert.deepEqual(drives, []);
+	assert.ok(Date.now() - started < 1_000);
+	await new Promise((resolve) => setTimeout(resolve, 100));
+});
+
+test("directory path validation rejects drive-relative Windows paths", () => {
+	assert.equal(fullyQualifiedDirectoryPath("D:\\work", "win32"), true);
+	assert.equal(fullyQualifiedDirectoryPath("\\\\server\\share\\work", "win32"), true);
+	assert.equal(fullyQualifiedDirectoryPath("D:work", "win32"), false);
+	assert.equal(fullyQualifiedDirectoryPath("\\work", "win32"), false);
+	assert.equal(fullyQualifiedDirectoryPath("/work", "linux"), true);
+});
+
+test("private directory listing returns sorted folders, crumbs and bounded rows", async () => {
+	const closed = [];
+	const dirents = [
+		{ name: "zeta", isDirectory: () => true, isSymbolicLink: () => false },
+		{ name: "file.txt", isDirectory: () => false, isSymbolicLink: () => false },
+		{ name: ".hidden", isDirectory: () => true, isSymbolicLink: () => false },
+		{ name: "link", isDirectory: () => false, isSymbolicLink: () => true },
+	];
+	let readIndex = 0;
+	const listing = await listHostDirectory("D:\\projects", {
+		platform: "win32",
+		home: "C:\\Users\\u",
+		maxEntries: 2,
+		opendir: async (target) => ({
+			async read() { return dirents[readIndex++] ?? null; },
+			async close() { closed.push(target); },
+		}),
+		stat: async () => ({ isDirectory: () => true }),
+	});
+	assert.equal(listing.path, "D:\\projects");
+	assert.equal(listing.home, "C:\\Users\\u");
+	assert.deepEqual(listing.crumbs.map((entry) => entry.path), ["D:\\", "D:\\projects"]);
+	assert.deepEqual(listing.entries.map((entry) => [entry.name, entry.hidden]), [[".hidden", true], ["link", false]]);
+	assert.equal(listing.truncated, true);
+	assert.deepEqual(closed, ["D:\\projects"]);
+});
+
+test("an aborted directory open closes a handle that resolves late", async () => {
+	let resolveOpen;
+	const closed = [];
+	const controller = new AbortController();
+	const directory = {
+		async read() { return null; },
+		async close() { closed.push(true); },
+	};
+	const listing = listHostDirectory("D:\\projects", {
+		platform: "win32",
+		home: "C:\\Users\\u",
+		opendir: () => new Promise((resolve) => { resolveOpen = resolve; }),
+		signal: controller.signal,
+	});
+	controller.abort();
+	await assert.rejects(listing);
+	resolveOpen(directory);
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.deepEqual(closed, [true]);
+});
+
+test("an aborted directory read returns promptly and starts closing its handle", async () => {
+	let resolveRead;
+	let closeCalls = 0;
+	const controller = new AbortController();
+	const listing = listHostDirectory("D:\\projects", {
+		platform: "win32",
+		home: "C:\\Users\\u",
+		opendir: async () => ({
+			read: () => new Promise((resolve) => { resolveRead = resolve; }),
+			async close() { closeCalls += 1; },
+		}),
+		signal: controller.signal,
+	});
+	await Promise.resolve();
+	await Promise.resolve();
+	controller.abort();
+	await assert.rejects(listing);
+	assert.equal(closeCalls, 1);
+	resolveRead(null);
+});
+
+test("private directory creation accepts one child segment and reports conflicts", async () => {
+	const created = [];
+	assert.equal(await createHostDirectory("D:\\projects", "new", {
+		platform: "win32",
+		mkdir: async (target) => { created.push(target); },
+	}), "D:\\projects\\new");
+	assert.deepEqual(created, ["D:\\projects\\new"]);
+	await assert.rejects(
+		() => createHostDirectory("D:\\projects", "..", { platform: "win32", mkdir: async () => {} }),
+		(error) => error.directoryCode === "directory-create-failed",
+	);
+	await assert.rejects(
+		() => createHostDirectory("D:\\projects", "exists", {
+			platform: "win32",
+			mkdir: async () => { throw Object.assign(new Error("exists"), { code: "EEXIST" }); },
+		}),
+		(error) => error.directoryCode === "directory-exists" && error.directoryPath === "D:\\projects\\exists",
+	);
+});
+
+test("directory RPC is trusted-host only and serves drives, listing and creation", async () => {
 	let registration = null;
 	const ctx = {
 		connection: {
@@ -147,20 +273,42 @@ test("drive RPC is registered behind trusted-host authority and returns enumerat
 			},
 		},
 	};
-	const result = registerDriveRpc(ctx, { listWindowsDrives: () => ["C:\\", "D:\\"] });
+	const calls = [];
+	const result = registerDirectoryRpc(ctx, {
+		listWindowsDrives: () => ["C:\\", "D:\\"],
+		listHostDirectory: async (path, options) => {
+			calls.push(["list", path, options.signal]);
+			return { path: path ?? "C:\\Users\\u", home: "C:\\Users\\u", crumbs: [], entries: [], truncated: false };
+		},
+		createHostDirectory: async (path, name, options) => {
+			calls.push(["create", path, name, options.signal]);
+			return `${path}${name}`;
+		},
+	});
 	assert.equal(result, "drive-rpc-disposer");
 	assert.equal(registration.channel, "/tailscale-serve");
 	assert.deepEqual(registration.options, { authority: "trusted-host" });
-	assert.deepEqual(await registration.handler("listDrives"), {
+	assert.deepEqual(await registration.handler("listDrives", {}), {
 		ok: true,
 		value: { drives: ["C:\\", "D:\\"] },
 	});
+	const signal = new AbortController().signal;
+	assert.deepEqual(await registration.handler("listDirectory", { path: "D:\\" }, signal), {
+		ok: true,
+		value: { path: "D:\\", home: "C:\\Users\\u", crumbs: [], entries: [], truncated: false },
+	});
+	assert.deepEqual(await registration.handler("createDirectory", { path: "D:\\", name: "work" }, signal), {
+		ok: true,
+		value: { path: "D:\\work" },
+	});
+	assert.deepEqual(calls, [["list", "D:\\", signal], ["create", "D:\\", "work", signal]]);
 });
 
-test("drive RPC rejects unknown endpoints without enumerating drives", async () => {
+test("directory RPC rejects malformed and unknown endpoints without filesystem work", async () => {
 	let handler = null;
 	let enumerateCalls = 0;
-	registerDriveRpc({
+	let listCalls = 0;
+	registerDirectoryRpc({
 		connection: {
 			rpc: {
 				handle(_channel, registeredHandler) {
@@ -173,8 +321,17 @@ test("drive RPC rejects unknown endpoints without enumerating drives", async () 
 			enumerateCalls += 1;
 			return ["C:\\"];
 		},
+		listHostDirectory: async () => { listCalls += 1; },
 	});
-	assert.deepEqual(await handler("not-listDrives"), {
+	assert.deepEqual(await handler("listDirectory", { path: 7 }), {
+		ok: false,
+		error: {
+			code: "bad-request",
+			message: "listDirectory requires an optional string path",
+			details: { issues: [] },
+		},
+	});
+	assert.deepEqual(await handler("not-listDrives", {}), {
 		ok: false,
 		error: {
 			code: "bad-request",
@@ -183,6 +340,7 @@ test("drive RPC rejects unknown endpoints without enumerating drives", async () 
 		},
 	});
 	assert.equal(enumerateCalls, 0);
+	assert.equal(listCalls, 0);
 });
 
 test("a DNS identity cannot turn a failed Serve command into success", () => {
@@ -203,6 +361,7 @@ test("a DNS identity cannot turn a failed Serve command into success", () => {
 	assert.equal(controller.state.serveConfigured, false);
 	assert.equal(controller.state.settled, false);
 	assert.deepEqual(ctx.webRuntime.trustedHosts, ["windows.example.ts.net"]);
+	assert.deepEqual(ctx.connection.trustedHosts, ["windows.example.ts.net"]);
 	assert.equal(logs.notes.some((line) => line.includes("now reachable")), false);
 	assert.equal(logs.warnings.some((line) => line.includes("could not configure Tailscale Serve")), true);
 	assert.equal(commands.filter((args) => args[0] === "serve").length, 1);
@@ -221,6 +380,7 @@ test("Serve success is accepted only after the matching node-level route is veri
 	assert.equal(controller.state.routeVerified, true);
 	assert.equal(controller.state.settled, true);
 	assert.equal(controller.state.endpointUrl, "https://host.tailnet.ts.net");
+	assert.deepEqual(ctx.connection.trustedHosts, ["host.tailnet.ts.net"]);
 	assert.equal(logs.notes.some((line) => line.includes("DSH web is now reachable")), true);
 	assert.equal(logs.warnings.length, 0);
 });
@@ -528,6 +688,7 @@ test("a stale configured hostname does not hide or orphan the actual route", asy
 	assert.equal(controller.state.settled, true);
 	assert.equal(controller.state.endpointUrl, "https://actual.tailnet.ts.net");
 	assert.deepEqual(ctx.webRuntime.trustedHosts, ["stale.tailnet.ts.net", "actual.tailnet.ts.net"]);
+	assert.deepEqual(ctx.connection.trustedHosts, ["stale.tailnet.ts.net", "actual.tailnet.ts.net"]);
 	assert.equal(logs.warnings.some((line) => line.includes("using the actual route")), true);
 	await getDisposer()();
 	assert.equal(fake.posts.length, 1);
@@ -729,3 +890,262 @@ test("URL and config helpers normalize edge cases", () => {
 	assert.equal(permissionDenied({ status: 403, body: "Access is denied." }), true);
 	assert.equal(permissionDenied(failed("backend NoState")), false);
 });
+
+test("directory entries sort like Windows Explorer (natural, case-insensitive, Latin first)", () => {
+	const names = ["文件夹10", "文件夹2", "项目", "项目10", "项目2", "a10", "a2", "B", "b1", "Folder 10", "Folder 2", "zebra"];
+	const sorted = [...names].sort(explorerEntryCompare);
+	assert.deepEqual(sorted, ["a2", "a10", "B", "b1", "Folder 2", "Folder 10", "zebra", "文件夹2", "文件夹10", "项目", "项目2", "项目10"]);
+	// the bounded-insert path uses the same comparator on {name} objects
+	assert.equal(explorerEntryCompare({ name: "a2" }, { name: "a10" }) < 0, true);
+	assert.equal(explorerEntryCompare({ name: "Folder 10" }, { name: "Folder 2" }) > 0, true);
+	assert.equal(explorerEntryCompare("项目", "zebra") > 0, true);
+});
+
+test("static enhancer gzips, tags and caches /assets and /plugins responses", async () => {
+	const listeners = [];
+	const server = {
+		listeners: () => listeners.slice(),
+		removeAllListeners: (event) => { if (event === "request") listeners.length = 0; },
+		on: (event, fn) => { if (event === "request") listeners.push(fn); },
+	};
+	// the downstream handler stands in for DSH's static/fallback serving
+	let downstreamCalls = 0;
+	let sseRes = null;
+	const downstream = (req, res) => {
+		downstreamCalls += 1;
+		if (req.url === "/plugins/events") {
+			sseRes = res;
+			res.writeHead(200, { "content-type": "text/event-stream" });
+			res.end();
+			return;
+		}
+		res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+		res.end(Buffer.from("const x = 1;\n".repeat(400)));
+	};
+	listeners.push(downstream);
+	const dispose = installStaticEnhancer({ webServer: { server } });
+	assert.equal(listeners.length, 1);
+	const enhanced = listeners[0];
+	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
+	const gzipGet = { method: "GET", headers: { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" }, destroyed: false };
+
+	const first = makeRes();
+	await enhanced({ ...gzipGet, url: "/assets/index-abc123.js" }, first);
+	assert.equal(first.status, 200);
+	assert.equal(first.headers["content-encoding"], "gzip");
+	assert.equal(first.headers["cache-control"], "public, max-age=31536000, immutable");
+	const etag = first.headers.etag;
+	assert.match(etag, /^W\//);
+	const plain = Buffer.concat(first.chunks).length;
+	assert.ok(plain < 5200 && plain > 0, "gzipped body present");
+	assert.equal(downstreamCalls, 1);
+
+	// a loopback Host (the PC's own browser) gets byte-exact stock responses
+	const pc = makeRes();
+	await enhanced({ method: "GET", url: "/assets/index-abc123.js", headers: { host: "127.0.0.1:3080" }, destroyed: false }, pc);
+	assert.equal(pc.headers["content-encoding"], undefined);
+	assert.equal(pc.headers["cache-control"], undefined);
+	assert.equal(pc.headers.etag, undefined);
+	assert.equal(Buffer.concat(pc.chunks).toString().startsWith("const x = 1;"), true);
+
+	// repeat with a validator: 304 from cache, downstream untouched
+	const servedBefore = downstreamCalls;
+	const second = makeRes();
+	await enhanced({ ...gzipGet, url: "/assets/index-abc123.js", headers: { "accept-encoding": "gzip", "if-none-match": etag } }, second);
+	assert.equal(second.status, 304);
+	assert.equal(second.chunks.length, 0);
+	assert.equal(downstreamCalls, servedBefore);
+
+	// repeat without a validator: full 200 from cache, still no downstream call
+	const third = makeRes();
+	await enhanced({ ...gzipGet, url: "/assets/index-abc123.js" }, third);
+	assert.equal(third.status, 200);
+	assert.equal(downstreamCalls, servedBefore);
+
+	// a client without gzip support gets the raw bytes
+	const fourth = makeRes();
+	await enhanced({ method: "GET", url: "/assets/index-abc123.js", headers: {}, destroyed: false }, fourth);
+	assert.equal(fourth.headers["content-encoding"], undefined);
+	assert.equal(Buffer.concat(fourth.chunks).length > plain, true);
+
+	// plugin bundle urls with a rev parameter are immutable too
+	const fifth = makeRes();
+	await enhanced({ ...gzipGet, url: "/plugins/@deepseek-ai/dsh-x/client.js?rev=abc" }, fifth);
+	assert.equal(fifth.headers["cache-control"], "public, max-age=31536000, immutable");
+
+	// non-hashed names stay revalidating (no-cache) but still carry an ETag
+	const sixth = makeRes();
+	await enhanced({ ...gzipGet, url: "/assets/plain.js" }, sixth);
+	assert.equal(sixth.headers["cache-control"], "no-cache");
+	assert.ok(sixth.headers.etag);
+
+	// /api and SSE paths pass through untouched — the downstream receives the
+	// REAL response object (no buffering shim), so streams keep streaming
+	const seventh = makeRes();
+	await enhanced({ method: "GET", url: "/plugins/events", headers: { "accept-encoding": "gzip" }, destroyed: false }, seventh);
+	assert.notEqual(sseRes, null, "SSE reached the downstream handler directly");
+	assert.equal(sseRes, seventh, "SSE downstream received the real response object");
+	assert.equal(seventh.status, 200);
+	assert.equal(seventh.headers["content-encoding"], undefined);
+
+	// dispose restores the original listener set
+	dispose();
+	assert.equal(listeners.includes(enhanced), false);
+	assert.equal(listeners.includes(downstream), true);
+});
+
+test("static enhancer leaves non-cacheable and /api responses byte-identical", async () => {
+	const listeners = [];
+	const server = {
+		listeners: () => listeners.slice(),
+		removeAllListeners: (event) => { if (event === "request") listeners.length = 0; },
+		on: (event, fn) => { if (event === "request") listeners.push(fn); },
+	};
+	listeners.push((req, res) => {
+		if (req.url === "/api/thing") {
+			res.writeHead(200, { "content-type": "application/json" });
+			res.end('{"ok":true}');
+			return;
+		}
+		res.writeHead(200, { "content-type": "image/png" });
+		res.end(Buffer.alloc(2048, 7));
+	});
+	const dispose = installStaticEnhancer({ webServer: { server } });
+	const enhanced = listeners[0];
+	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
+
+	const api = makeRes();
+	await enhanced({ method: "POST", url: "/api/thing", headers: { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" }, destroyed: false }, api);
+	assert.equal(api.status, 200);
+	// below the gzip threshold, so raw bytes — but unary /api JSON carries an
+	// ETag now (0.3.0): revalidation without re-downloading
+	assert.equal(api.headers["content-encoding"], undefined);
+	assert.ok(api.headers.etag);
+	assert.equal(Buffer.concat(api.chunks).toString(), '{"ok":true}');
+
+	const png = makeRes();
+	await enhanced({ method: "GET", url: "/plugins/some/icon.png", headers: { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" }, destroyed: false }, png);
+	assert.equal(png.headers["content-encoding"], undefined);
+	assert.equal(png.headers.etag, undefined);
+	assert.equal(png.headers["cache-control"], undefined);
+	assert.equal(png.chunks[0].length, 2048);
+	dispose();
+});
+
+test("static enhancer compresses unary /api JSON and passes streams through", async () => {
+	const listeners = [];
+	const server = {
+		listeners: () => listeners.slice(),
+		removeAllListeners: (event) => { if (event === "request") listeners.length = 0; },
+		on: (event, fn) => { if (event === "request") listeners.push(fn); },
+	};
+	listeners.push((req, res) => {
+		if (req.url === "/api/sessions.history") {
+			res.writeHead(200, { "content-type": "application/json" });
+			res.end(JSON.stringify({ history: Array.from({ length: 400 }, (_, i) => `消息 ${i} 一些聊天内容`).join("\n") }));
+			return;
+		}
+		if (req.url === "/api/stream") {
+			res.writeHead(200, { "content-type": "text/event-stream" });
+			res.write("data: one\n\n");
+			res.write("data: two\n\n");
+			res.end();
+			return;
+		}
+		res.writeHead(200, { "content-type": "application/json" });
+		res.end('{"small":true}');
+	});
+	const dispose = installStaticEnhancer({ webServer: { server } });
+	const enhanced = listeners[0];
+	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, write(c) { this.chunks.push(Buffer.from(c)); }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
+	const phone = { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" };
+
+	// a big unary JSON response from a phone host: gzipped with an ETag
+	const history = makeRes();
+	await enhanced({ method: "POST", url: "/api/sessions.history", headers: { ...phone }, destroyed: false }, history);
+	assert.equal(history.status, 200);
+	assert.equal(history.headers["content-encoding"], "gzip");
+	assert.ok(history.headers.etag);
+	assert.ok(Number(history.headers["content-length"]) < 6000, "gzipped body is much smaller than the ~7KB JSON");
+
+	// conditional re-request with the ETag: 304, zero bytes
+	const history304 = makeRes();
+	await enhanced({ method: "POST", url: "/api/sessions.history", headers: { ...phone, "if-none-match": history.headers.etag }, destroyed: false }, history304);
+	assert.equal(history304.status, 304);
+	assert.equal(history304.chunks.length, 0);
+
+	// a loopback host gets the raw, unenhanced response
+	const pcApi = makeRes();
+	await enhanced({ method: "POST", url: "/api/sessions.history", headers: { "accept-encoding": "gzip", host: "127.0.0.1:3080" }, destroyed: false }, pcApi);
+	assert.equal(pcApi.headers["content-encoding"], undefined);
+	assert.equal(pcApi.headers.etag, undefined);
+
+	// small JSON: no gzip (below threshold), still tagged
+	const small = makeRes();
+	await enhanced({ method: "GET", url: "/api/small", headers: { ...phone }, destroyed: false }, small);
+	assert.equal(small.headers["content-encoding"], undefined);
+	assert.ok(small.headers.etag);
+	assert.equal(Buffer.concat(small.chunks).toString(), '{"small":true}');
+
+	// the stream guard: an event-stream response is forwarded live, unbuffered
+	const stream = makeRes();
+	await enhanced({ method: "GET", url: "/api/stream", headers: { ...phone }, destroyed: false }, stream);
+	assert.equal(stream.status, 200);
+	assert.equal(stream.headers["content-encoding"], undefined);
+	assert.equal(Buffer.concat(stream.chunks).toString().includes("data: two"), true);
+	dispose();
+});
+
+test("static enhancer keeps gzip on slow-to-build session.list but bails to live for real streams", async () => {
+	const listeners = [];
+	const server = {
+		listeners: () => listeners.slice(),
+		removeAllListeners: (event) => { if (event === "request") listeners.length = 0; },
+		on: (event, fn) => { if (event === "request") listeners.push(fn); },
+	};
+	let payload = "session list json placeholder";
+	listeners.push((req, res) => {
+		if (req.url === "/api/session.list") {
+			// slower than the default 400ms guard, faster than the 5s slow-unary guard
+			setTimeout(() => {
+				res.writeHead(200, { "content-type": "application/json" });
+				res.end(payload.repeat(200));
+			}, 600);
+			return;
+		}
+		if (req.url === "/api/slowjsonstream") {
+			// slower than the 400ms default guard: exercises the watchdog's live switch
+			setTimeout(() => {
+				res.writeHead(200, { "content-type": "application/json" });
+				res.write('{"partial":');
+				setTimeout(() => res.end('true}'), 100);
+			}, 900);
+			return;
+		}
+		res.writeHead(200, { "content-type": "application/json" });
+		res.end('{"ok":true}');
+	});
+	const dispose = installStaticEnhancer({ webServer: { server } });
+	const enhanced = listeners[0];
+	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, write(c) { this.chunks.push(Buffer.from(c)); }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
+	const phone = { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" };
+
+	const listing = makeRes();
+	await enhanced({ method: "POST", url: "/api/session.list", headers: { ...phone }, destroyed: false }, listing);
+	// the deferred 600ms build lands after forward() returns synchronously
+	await sleep(900);
+	assert.equal(listing.status, 200);
+	assert.equal(listing.headers["content-encoding"], "gzip", "session.list must stay buffered past the 400ms default guard so it ships gzipped");
+	assert.equal(listing.headers["cache-control"], undefined, "api responses get no caching headers");
+
+	// a stalled stream on the default guard is flushed live by the watchdog,
+	// and the downstream's late body still lands (live forwarding)
+	const stream = makeRes();
+	enhanced({ method: "GET", url: "/api/slowjsonstream", headers: { ...phone }, destroyed: false }, stream);
+	await sleep(700);
+	assert.equal(stream.status, 200, "watchdog flushed the stalled response live");
+	await sleep(700);
+	assert.equal(Buffer.concat(stream.chunks).toString().includes('"partial"'), true, "post-watchdog body forwarded live");
+	dispose();
+});
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }

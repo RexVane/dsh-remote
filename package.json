@@ -1,6 +1,6 @@
 {
   "name": "dsh-tailscale-serve",
-  "version": "0.1.0",
+  "version": "0.3.3",
   "description": "Expose the DSH web GUI over your Tailscale tailnet — one URL for LAN (direct) and WAN (DERP relay), with automatic TLS and automatic /api trust-fence inclusion (no --trusted-host needed).",
   "type": "module",
   "main": "lib/index.js",
@@ -34,6 +34,12 @@
     "LICENSE"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RexVane/dsh-tailscale-serve.git"
+  },
+  "homepage": "https://github.com/RexVane/dsh-tailscale-serve#readme",
+  "bugs": "https://github.com/RexVane/dsh-tailscale-serve/issues",
   "keywords": [
     "dsh",
     "deepseek-harness",

@@ -49,40 +49,11 @@
         # before success is reported. When omitted, arguments are generated.
         # serveArgs: []
 
-# Pin the browser directory picker for remote clients.
+# Keep dsh-web-app's stock `directory-picker-auto` entry intact. On this
+# loopback-bound Windows host it composes the native backend and native client,
+# so the PC at 127.0.0.1 keeps DeepSeek Harness's original OS folder dialog.
 #
-# dsh-web-app mounts `@deepseek-ai/dsh-host-directory-picker-auto`, which
-# resolves native-vs-browse ONCE at boot from sampled host facts. Its first
-# rule is `bindHost !== '127.0.0.1' -> browse`, reasoning that a loopback-only
-# bind means the only browser is on this machine, so an OS folder chooser is
-# reachable. This plugin is precisely what breaks that inference: DSH stays
-# bound to loopback while `tailscale serve` admits browsers from other
-# devices. The resolver cannot see the proxy, so on macOS/Windows it picks
-# `native` — and "add workspace" then fails from the phone with HTTP 403,
-# because the native backend's `host.pickDirectory` is in DSH's
-# PRIVILEGED_METHODS set, gated on `isTrustedApiRequest(request, [])` with a
-# hardcoded empty trusted-host list. The configuration plane is
-# loopback-same-origin by design and ignores the trust fence opened above.
-#
-# The browse backend's primitives (`workspace.create`, `host.listDirectory`, and
-# `host.createDirectory`) are not in that privileged set. Pinning `browse`
-# therefore lets a tailnet browser inspect folders and create/select a
-# workspace without changing DSH source code. The trade-off is global for this
-# web profile: the host browser also uses the in-page directory browser instead
-# of the native OS folder dialog.
-#
-# Both rows below are required: one Host backend serves the capability and one
-# client surface fills the workspace directory flow. Mounting only one leaves
-# the picker half-wired.
-
-- id: directory-picker
-  disabled: true
-
-- insert:
-    - id: directory-picker-browse
-      name: '@deepseek-ai/dsh-host-directory-picker-browse'
-
-# The plugin's client bundle owns this single directory-flow slot. It keeps the
-# browse Host capability above, but replaces the stock UI so a remote phone can
-# start at a virtual “此电脑” drive list without ever sending a fake path to
-# workspace.create.
+# The plugin client shadows that native directory-flow only on a non-loopback
+# page (the phone's Tailscale URL). Its directory list/create operations use the
+# plugin's own `/tailscale-serve` trusted RPC channel, so the Host can retain the
+# native picker capability while the phone gets the in-page "This PC" browser.
