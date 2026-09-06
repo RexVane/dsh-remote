@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that exposes the web GUI over your **Tailscale tailnet** — one URL for the phone, the tablet, or any browser on your tailnet. Works on **Wi-Fi (direct)** and **away (DERP relay)**, with automatic TLS, a remote workspace picker, and no `--trusted-host` flag.
 
-> **Compatibility:** Windows · DSH `0.1.0-rc.8` (fence/RPC behaviour additionally verified on `0.1.1-rc.2`) · Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`. Re-run `npm run check:all` after every DSH upgrade before trusting the selector-sensitive mobile layer.
+> **Compatibility:** host — Windows verified end to end; macOS lists `/Volumes` and Linux starts at the home directory (covered by tests, not exercised on real hardware) · client — any modern browser; Android Chrome verified on a real device, iOS Safari not yet exercised on hardware · DSH `0.1.0-rc.8` (fence/RPC behaviour additionally verified on `0.1.1-rc.2`) · Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`. Re-run `npm run check:all` after every DSH upgrade before trusting the selector-sensitive mobile layer.
 
 ## Prerequisites
 
@@ -45,7 +45,7 @@ Open that URL in the device browser and the setup is complete. `DSH web is now r
 
 1. Open the Tailscale app on the device and confirm it is **online**.
 2. Open `https://<machine>.<tailnet>.ts.net` in its browser — phone, tablet, or another computer.
-3. Chat, tool calls, and deliverables stream **live** — the same session as the PC. Creating a workspace opens the plugin's virtual **This PC** view: pick a drive, browse real folders, create one, select it. The host PC's own page keeps the native OS folder dialog.
+3. Chat, tool calls, and deliverables stream **live** — the same session as the PC. Creating a workspace opens the plugin's remote browser — Windows drive letters, macOS volumes, or the home directory — to browse real folders, create one, and select it. The host PC's own page keeps the native OS folder dialog.
 4. Same URL works away from home: Tailscale relays through DERP when there is no direct path.
 
 Remote devices do **not** need to run DSH or any plugin — only Tailscale membership. Editing or verifying the mobile-fit layer (selector strategy, the two known traps, the verification suites) is documented in [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).

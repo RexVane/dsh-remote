@@ -13,6 +13,7 @@ import {
 	fullyQualifiedDirectoryPath,
 	installStaticEnhancer,
 	listHostDirectory,
+	listHostRoots,
 	listWindowsDrives,
 	permissionDenied,
 	proxyTargetForBind,
@@ -281,7 +282,7 @@ test("directory RPC is trusted-host only and serves drives, listing and creation
 	};
 	const calls = [];
 	const result = registerDirectoryRpc(ctx, {
-		listWindowsDrives: () => ["C:\\", "D:\\"],
+		listHostRoots: () => ["C:\\", "D:\\"],
 		listHostDirectory: async (path, options) => {
 			calls.push(["list", path, options.signal]);
 			return { path: path ?? "C:\\Users\\u", home: "C:\\Users\\u", crumbs: [], entries: [], truncated: false };
@@ -1241,4 +1242,24 @@ test("prewarm populates the cache before any phone request arrives", async () =>
 	assert.equal(fetched.headers["cache-control"], "public, max-age=31536000, immutable");
 	dispose();
 	await new Promise((resolve) => real.close(resolve));
+});
+
+test("host roots come from /Volumes on macOS; other Unix hosts keep the home fallback", async () => {
+	const mac = await listHostRoots({
+		platform: "darwin",
+		readdir: async () => [{ name: "Macintosh HD" }, { name: ".TimeMachine" }, { name: "Backup" }],
+		stat: async (path) => ({ isDirectory: () => !path.includes(".TimeMachine") }),
+		probeTimeoutMs: 100,
+	});
+	assert.deepEqual(mac, ["/Volumes/Backup", "/Volumes/Macintosh HD"]);
+	const linux = await listHostRoots({
+		platform: "linux",
+		readdir: async () => {
+			throw new Error("must not read /Volumes");
+		},
+		stat: async () => {
+			throw new Error("must not stat");
+		},
+	});
+	assert.deepEqual(linux, []);
 });

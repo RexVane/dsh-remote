@@ -95,10 +95,10 @@ HTTP 403
 
 再加一个 `--trusted-host`、放宽 Tailscale ACL、改 `hostname` 或重试 Serve 都解锁不了这些方法。不改源码的受支持分工是:
 
-- **目录与工作区**:DSH 原生 `directory-picker-auto` 保持启用,回环的电脑页保留原生 Windows/macOS 对话框。只有非回环页面(手机的 Tailscale 网址)会遮蔽两个客户端目录流槽位。它的 `listDrives`、`listDirectory`、`createDirectory` 走插件自己的 `trusted-host` RPC 通道;最终真实路径仍交给 DSH 普通的 `workspace.create`。Windows 上手机先看到虚拟**此电脑**盘符列表;虚拟标签本身永远不会被当作文件系统路径提交。
+- **目录与工作区**:DSH 原生 `directory-picker-auto` 保持启用,回环的电脑页保留原生 Windows/macOS 对话框。只有非回环页面(手机的 Tailscale 网址)会遮蔽两个客户端目录流槽位。它的 `listDrives`、`listDirectory`、`createDirectory` 走插件自己的 `trusted-host` RPC 通道;最终真实路径仍交给 DSH 普通的 `workspace.create`。Windows 显示虚拟**此电脑**盘符列表,macOS 显示其 `/Volumes`;虚拟标签本身永远不会被当作文件系统路径提交。
 - **一小片明确的设置面**:手机可以 (1) 运行模型发现(`llm.discoverModels`),(2) 读取设置 describe 视图(`settings.describe`,提供方已脱敏机密——只有存在标志过线),(3) 精确写 `agent-presets` 命名空间(`settings.update` 限定 `ns: "agent-presets"`,让设置页的 **Agent 预设**选择器在手机上可用),以及 (4) 从**模型配置 / Models** 页保存提供方修改——`settings.mutate` 限定 `llm-*` 提供方命名空间,加上 `credentials.describe`(只有配置标志,无值)和 `credentials.set`/`credentials.unset`(限环境变量形状的 API key 引用,如 `DEEPSEEK_API_KEY`)。这一切由插件自己的 `trusted-host` RPC 通道提供,受众只有 tailnet 页面(Tailscale 成员身份 + ACL + TLS)。配置面的其他一切——其余设置命名空间、权限行——仍仅限回环;这些管理操作请在主机电脑(`http://127.0.0.1:3080` 或 DSH 打印的端口)执行。配置完成后,远程页面仍可读取非机密模型目录并使用选定的模型。
 
-手机 picker 是功能访问,不是文件系统沙箱:Windows 从就绪的盘符根开始;其他主机、或盘符探测失败/为空时,回退到主机账户的主目录。它接受全限定路径,没有部署级的浏览根限制。请把 Tailscale ACL 限定到你信任其接触 DSH、也信任其查看该账户目录的设备/用户。
+手机 picker 是功能访问,不是文件系统沙箱:Windows 从就绪的盘符根开始,macOS 从 `/Volumes` 开始;Linux 及其他主机、或探测失败/为空时,回退到主机账户的主目录。它接受全限定路径,没有部署级的浏览根限制。请把 Tailscale ACL 限定到你信任其接触 DSH、也信任其查看该账户目录的设备/用户。
 
 如果手机仍然调用 `pickDirectory`,确认它用的是 `*.ts.net` 网址而不是 `127.0.0.1`、`dsh-remote` 客户端 bundle 处于活动状态、且当前插件版本提供 `/dsh-remote/listDrives`。最终组合应保持原生 `directory-picker` 条目启用;不要用浏览后端全局替换它,那会连电脑一起改掉。
 

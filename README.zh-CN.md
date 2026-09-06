@@ -4,7 +4,7 @@
 
 一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH)插件:把 DSH 网页 GUI 通过 **Tailscale tailnet** 暴露出去——手机、平板、tailnet 里的任何浏览器,同一个网址都能用。在家(Wi-Fi 直连)在外(DERP 中继)都行,TLS 自动配置,支持远程工作区选择器,无需 `--trusted-host`。
 
-> **兼容目标**:Windows · DSH `0.1.0-rc.8`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重新运行 `npm run check:all`,再视为已验证。
+> **兼容目标**:主机——Windows 已端到端验证;macOS 列出 `/Volumes`,Linux 从主目录开始(均有测试覆盖,未在真实硬件上执行)· 客户端——任何现代浏览器;Android Chrome 已在真机验证,iOS Safari 尚未在真机执行 · DSH `0.1.0-rc.8`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重新运行 `npm run check:all`,再视为已验证。
 
 ## 前提条件
 
@@ -45,7 +45,7 @@ dsh-remote: DSH web is now reachable on your tailnet: https://<machine>.<tailnet
 
 1. 设备上打开 Tailscale App,确认**在线**。
 2. 浏览器打开 `https://<machine>.<tailnet>.ts.net`——手机、平板、另一台电脑都行。
-3. 聊天、工具调用、交付物**实时**流式呈现——和电脑上同一个会话。新建工作区会打开插件的虚拟**此电脑**视图:选盘符、浏览真实目录、可新建并选择。主机电脑自己的页面保持原生系统目录对话框。
+3. 聊天、工具调用、交付物**实时**流式呈现——和电脑上同一个会话。新建工作区会打开插件的远程浏览器——Windows 盘符、macOS 卷或主目录——浏览真实目录、可新建并选择。主机电脑自己的页面保持原生系统目录对话框。
 4. 同一网址在外网也能用:没有直连路径时 Tailscale 走 DERP 中继。
 
 远程设备**不需要**运行 DSH 或任何插件——只需要 Tailscale 成员身份。移动适配层的修改与验证(选择器策略、两个已知的坑、验证套件)见 [docs/HOW-IT-WORKS.zh-CN.md](docs/HOW-IT-WORKS.zh-CN.md)。
