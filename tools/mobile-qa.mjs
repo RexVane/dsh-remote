@@ -226,7 +226,7 @@ try {
 	console.log("\n[01] load at 390px");
 
 	const load = await evalJs(`(() => {
-		const sheet = [...document.querySelectorAll("style")].some((s) => s.id === "dsh-tailscale-serve-mobile-fit");
+		const sheet = [...document.querySelectorAll("style")].some((s) => s.id === "dsh-remote-mobile-fit");
 		const meta = document.querySelector('meta[name="viewport"]')?.getAttribute("content") ?? "";
 		const ov = __qa.overflow();
 		const toggle = document.querySelector('[class*="_sidebarCol"] [class*="_toggle"]');
@@ -335,11 +335,11 @@ try {
 		if (!add) return { err: "no add-workspace item in the switcher menu" };
 		__qa.click(add);
 		await new Promise((r) => setTimeout(r, 2500));
-		const dialog = document.querySelector(".dsh-ts-picker-dialog");
+		const dialog = document.querySelector(".dsh-remote-picker-dialog");
 		if (!dialog) return { err: "picker dialog did not open" };
-		const drives = [...dialog.querySelectorAll(".dsh-ts-picker-drive")].filter((b) => __qa.visible(b)).map((b) => (b.querySelector(".dsh-ts-picker-name")?.textContent ?? "").trim());
-		const footer = dialog.querySelector(".dsh-ts-picker-footer");
-		const body = dialog.querySelector(".dsh-ts-picker-body");
+		const drives = [...dialog.querySelectorAll(".dsh-remote-picker-drive")].filter((b) => __qa.visible(b)).map((b) => (b.querySelector(".dsh-remote-picker-name")?.textContent ?? "").trim());
+		const footer = dialog.querySelector(".dsh-remote-picker-footer");
+		const body = dialog.querySelector(".dsh-remote-picker-body");
 		const footerBox = footer ? __qa.box(footer) : null;
 		const bodyBox = body ? __qa.box(body) : null;
 		return { drives, dialogBox: __qa.box(dialog), footerBelowBody: footerBox && bodyBox ? footerBox.y >= bodyBox.y + bodyBox.h - 2 : null };
@@ -352,14 +352,14 @@ try {
 	}
 
 	const folders = await evalJs(`(async () => {
-		const dialog = document.querySelector(".dsh-ts-picker-dialog");
+		const dialog = document.querySelector(".dsh-remote-picker-dialog");
 		if (!dialog) return { err: "no dialog" };
-		const drive = [...dialog.querySelectorAll(".dsh-ts-picker-drive")].find((b) => __qa.visible(b));
+		const drive = [...dialog.querySelectorAll(".dsh-remote-picker-drive")].find((b) => __qa.visible(b));
 		if (!drive) return { err: "no drive" };
 		__qa.click(drive);
 		await new Promise((r) => setTimeout(r, 2500));
-		const folderBtns = [...dialog.querySelectorAll(".dsh-ts-picker-folder")].filter((b) => __qa.visible(b));
-		const crumbs = [...dialog.querySelectorAll(".dsh-ts-picker-path-button")].map((b) => (b.textContent ?? "").trim());
+		const folderBtns = [...dialog.querySelectorAll(".dsh-remote-picker-folder")].filter((b) => __qa.visible(b));
+		const crumbs = [...dialog.querySelectorAll(".dsh-remote-picker-path-button")].map((b) => (b.textContent ?? "").trim());
 		return { folders: folderBtns.length, names: folderBtns.slice(0, 3).map((b) => (b.textContent ?? "").trim()), crumbs };
 	})()`);
 	if (folders?.err) { warn("folder list", folders.err); }
@@ -369,16 +369,16 @@ try {
 	}
 
 	const entered = await evalJs(`(async () => {
-		const dialog = document.querySelector(".dsh-ts-picker-dialog");
-		const folder = dialog?.querySelector(".dsh-ts-picker-folder");
+		const dialog = document.querySelector(".dsh-remote-picker-dialog");
+		const folder = dialog?.querySelector(".dsh-remote-picker-folder");
 		if (!folder) return { err: "no folder to enter" };
 		__qa.click(folder);
 		await new Promise((r) => setTimeout(r, 2500));
-		const crumbs = [...(dialog?.querySelectorAll(".dsh-ts-picker-path-button") ?? [])].map((b) => (b.textContent ?? "").trim());
+		const crumbs = [...(dialog?.querySelectorAll(".dsh-remote-picker-path-button") ?? [])].map((b) => (b.textContent ?? "").trim());
 		const cancel = [...(dialog?.querySelectorAll("button") ?? [])].find((b) => (b.textContent ?? "").trim() === "取消");
 		if (cancel) __qa.click(cancel);
 		await new Promise((r) => setTimeout(r, 1200));
-		return { crumbs, closed: !document.querySelector(".dsh-ts-picker-dialog") };
+		return { crumbs, closed: !document.querySelector(".dsh-remote-picker-dialog") };
 	})()`);
 	if (entered?.err) warn("enter folder / cancel", entered.err);
 	else {
@@ -626,7 +626,7 @@ try {
 		await sleep(2500);
 		const m = await evalJs(`(() => {
 			const ov = __qa.overflow();
-			const sheet = [...document.querySelectorAll("style")].some((s) => s.id === "dsh-tailscale-serve-mobile-fit");
+			const sheet = [...document.querySelectorAll("style")].some((s) => s.id === "dsh-remote-mobile-fit");
 			const toggle = document.querySelector('[class*="_sidebarCol"] [class*="_toggle"]');
 			return { ...ov, sheet, toggleVisible: __qa.visible(toggle), toggleBox: __qa.box(toggle) };
 		})()`);

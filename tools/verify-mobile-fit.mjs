@@ -255,7 +255,7 @@ try {
 			body: JSON.stringify({ type: "client-request", rpcId: "qa", method: "llm.discoverModels", payload: { settingsNs: "llm-deepseek" } }),
 		});
 		const call = rpcCalls.find((c) => c.endpoint === "discoverModels");
-		if (!call || call.channel !== "/tailscale-serve") fail("the discoverModels proxy route does not match DSH's wire shape — discovery would 403 on the phone");
+		if (!call || call.channel !== "/dsh-remote") fail("the discoverModels proxy route does not match DSH's wire shape — discovery would 403 on the phone");
 		else pass("discoverModels proxy route matches DSH's wire shape");
 	}
 	const injected = slots[0].options.inject();
@@ -290,7 +290,7 @@ try {
 	rpcCalls.length = 0;
 	driveButtons.find((button) => text(button) === "D:\\")?.props.onClick?.();
 	const directoryCall = rpcCalls.find((call) => call.endpoint === "listDirectory");
-	if (directoryCall?.channel !== "/tailscale-serve" || directoryCall?.payload?.path !== "D:\\") fail(`D:\\ did not use the private directory RPC; buttons=${buttons.map(text).join(" | ")}`);
+	if (directoryCall?.channel !== "/dsh-remote" || directoryCall?.payload?.path !== "D:\\") fail(`D:\\ did not use the private directory RPC; buttons=${buttons.map(text).join(" | ")}`);
 	else pass('clicking D:\\ calls the private listDirectory RPC with "D:\\\\"');
 	// After the RPC resolves, re-render and verify the folder list appears.
 	await flushMicrotasks();
@@ -308,7 +308,7 @@ try {
 	await flushMicrotasks();
 	tree = react.render(slots[0].Component, props);
 	const notices = [];
-	walkTree(tree, (node) => { if (node.props?.className === "dsh-ts-picker-truncated") notices.push(node); });
+	walkTree(tree, (node) => { if (node.props?.className === "dsh-remote-picker-truncated") notices.push(node); });
 	if (notices.length !== 1) fail("a truncated listing rendered no truncation notice");
 	else pass("a truncated listing surfaces a truncation notice");
 
@@ -331,8 +331,8 @@ try {
 	const errorNodes = [];
 	let driveGridBack = false;
 	walkTree(tree, (node) => {
-		if (node.props?.className === "dsh-ts-picker-error") errorNodes.push(node);
-		if (node.props?.className === "dsh-ts-picker-drive-grid") driveGridBack = true;
+		if (node.props?.className === "dsh-remote-picker-error") errorNodes.push(node);
+		if (node.props?.className === "dsh-remote-picker-drive-grid") driveGridBack = true;
 	});
 	hangingPath = null;
 	if (errorNodes.length > 0) fail("returning to This PC mid-listing surfaced the abort as an error banner");
@@ -451,7 +451,7 @@ try {
 	//   the app shell   -> _name_hash  (_item_19372)
 	// The shell classes back the shared menu primitives this sheet also styles.
 	const pluginUrls = [...new Set([...html.matchAll(/\/plugins\/[^"'\\\s]+?client\.js[^"'\\\s]*/g)].map((m) => m[0]))]
-		.filter((u) => !u.includes("dsh-tailscale-serve")); // exclude ourselves: we would self-match
+		.filter((u) => !u.includes("dsh-remote")); // exclude ourselves: we would self-match
 	const shellUrls = [...new Set([...html.matchAll(/\/assets\/[A-Za-z0-9._-]+\.(?:css|js)/g)].map((m) => m[0]))];
 	if (pluginUrls.length === 0) throw new Error("no client bundles listed in the boot payload");
 	const urls = [...pluginUrls, ...shellUrls];

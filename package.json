@@ -1,7 +1,7 @@
 {
-  "name": "dsh-tailscale-serve",
-  "version": "0.4.0",
-  "description": "Expose the DSH web GUI over your Tailscale tailnet — one URL for LAN (direct) and WAN (DERP relay), with automatic TLS and automatic /api trust-fence inclusion (no --trusted-host needed).",
+  "name": "dsh-remote",
+  "version": "0.4.1",
+  "description": "Use DeepSeek Harness (DSH) from any device on your Tailscale tailnet — phone, tablet, or another PC. Phone-first layout, remote workspace picker, Brotli transport optimization, zero impact on the host PC.",
   "type": "module",
   "main": "lib/index.js",
   "engines": {
@@ -38,19 +38,19 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RexVane/dsh-tailscale-serve.git"
+    "url": "git+https://github.com/RexVane/dsh-remote.git"
   },
-  "homepage": "https://github.com/RexVane/dsh-tailscale-serve#readme",
-  "bugs": "https://github.com/RexVane/dsh-tailscale-serve/issues",
+  "homepage": "https://github.com/RexVane/dsh-remote#readme",
+  "bugs": "https://github.com/RexVane/dsh-remote/issues",
   "keywords": [
     "dsh",
     "deepseek-harness",
     "tailscale",
-    "tailscale-serve",
     "remote-access",
-    "lan",
-    "mesh-vpn",
     "phone",
+    "tablet",
+    "mobile",
+    "mesh-vpn",
     "streaming"
   ],
   "dsh": {

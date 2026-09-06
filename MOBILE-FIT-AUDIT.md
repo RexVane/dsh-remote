@@ -14,7 +14,7 @@ The earlier round of work drove a real browser and checked geometry at ten viewp
 
 So this round attacked the problem from the other side: every selector in the sheet was checked against the bundles the running DSH actually serves, and the JavaScript half was executed under a stub browser to test its behaviour directly.
 
-A key correction happened mid-audit and is worth recording. The first selector sweep searched a corpus that **included this plugin's own bundle**, so every selector matched itself and the sweep reported all-clear. Re-running with the plugin excluded is what surfaced the two dead selectors below. Any future sweep must exclude `dsh-tailscale-serve` from the corpus.
+A key correction happened mid-audit and is worth recording. The first selector sweep searched a corpus that **included this plugin's own bundle**, so every selector matched itself and the sweep reported all-clear. Re-running with the plugin excluded is what surfaced the two dead selectors below. Any future sweep must exclude `dsh-remote` from the corpus.
 
 ---
 
@@ -132,7 +132,7 @@ The `_section` elements at 720/760px that first looked like overflow risks are `
 
 - `${SETTINGS}` = `[class*="_panel"]:has([class*="_navList"])` resolves correctly: `VOzbGW_panel` contains `VOzbGW_navList` in the same bundle.
 - The breadcrumb correctly escapes the generic marquee `width: 28vw` on specificity (4 attributes vs 1), so the session name still spans the full header row.
-- `lib/index.js`, `package.json` and `cordis.patch.yml` are mutually consistent; the plugin is correctly linked into the web profile and its bundle is served (`/plugins/dsh-tailscale-serve/client.js`).
+- `lib/index.js`, `package.json` and `cordis.patch.yml` are mutually consistent; the plugin is correctly linked into the web profile and its bundle is served (`/plugins/dsh-remote/client.js`).
 - All stable `[class*="…"]` selectors resolve against the current build.
 
 ### 3.4 Literal build hashes are prohibited

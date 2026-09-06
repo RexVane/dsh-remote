@@ -204,7 +204,7 @@ function measure() {
 	const de = document.documentElement;
 	const frame = [...document.querySelectorAll("div")].find((d) => d.querySelector(':scope > [class*="_sidebarCol"]')) ?? null;
 	const toggle = document.querySelector('[class*="_sidebarCol"] [class*="_toggle"]');
-	const sheetOn = [...document.querySelectorAll("style")].some((s) => s.id === "dsh-tailscale-serve-mobile-fit");
+	const sheetOn = [...document.querySelectorAll("style")].some((s) => s.id === "dsh-remote-mobile-fit");
 
 	// Anything sticking out past the right edge is what makes a page rock sideways.
 	const overflowing = [];
@@ -306,7 +306,7 @@ try {
 	if (!booted) throw new Error("DSH never rendered its shell — is it running and reachable?");
 	pass("DSH shell rendered in headless browser");
 
-	const sheet = await cdp.eval(() => [...document.querySelectorAll("style")].some((s) => s.id === "dsh-tailscale-serve-mobile-fit"));
+	const sheet = await cdp.eval(() => [...document.querySelectorAll("style")].some((s) => s.id === "dsh-remote-mobile-fit"));
 	const loopbackOrigin = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(new URL(origin).hostname);
 	if (!sheet && loopbackOrigin) {
 		fail("the mobile-fit stylesheet is absent on a loopback origin — expected since 0.1.2 (the PC page mounts nothing by design); run against the tailnet URL to verify the phone layout");

@@ -292,7 +292,7 @@ test("directory RPC is trusted-host only and serves drives, listing and creation
 		},
 	});
 	assert.equal(result, "drive-rpc-disposer");
-	assert.equal(registration.channel, "/tailscale-serve");
+	assert.equal(registration.channel, "/dsh-remote");
 	assert.deepEqual(registration.options, { authority: "trusted-host" });
 	assert.deepEqual(await registration.handler("listDrives", {}), {
 		ok: true,
@@ -341,7 +341,7 @@ test("directory RPC rejects malformed and unknown endpoints without filesystem w
 		ok: false,
 		error: {
 			code: "bad-request",
-			message: "unknown tailscale-serve endpoint",
+			message: "unknown dsh-remote endpoint",
 			details: { issues: [] },
 		},
 	});
@@ -1199,14 +1199,14 @@ test("collectAssetUrls lists compressible asset URLs, keeps rev queries, skips t
 		'<link rel="stylesheet" crossorigin href="/assets/index-BNMwCG9c.css">',
 		'<link rel="modulepreload" href="/assets/chunk-abc123.js"/>',
 		'<img src="/assets/logo.png">',
-		'<script src="/plugins/dsh-tailscale-serve/client.js?rev=3f9a2c"></script>',
+		'<script src="/plugins/dsh-remote/client.js?rev=3f9a2c"></script>',
 		'<script type="module" src="/assets/index-CA9Bpko5.js"></script>',
 	].join("");
 	assert.deepEqual(collectAssetUrls(html), [
 		"/assets/index-CA9Bpko5.js",
 		"/assets/index-BNMwCG9c.css",
 		"/assets/chunk-abc123.js",
-		"/plugins/dsh-tailscale-serve/client.js?rev=3f9a2c",
+		"/plugins/dsh-remote/client.js?rev=3f9a2c",
 	]);
 	assert.deepEqual(collectAssetUrls(undefined), []);
 });

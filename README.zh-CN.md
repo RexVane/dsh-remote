@@ -1,8 +1,8 @@
-# dsh-tailscale-serve
+# dsh-remote
 
 [English](README.md) | 简体中文
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH)插件:把 DSH 网页 GUI 通过 **Tailscale tailnet** 暴露给手机——同一个网址在家(Wi-Fi 直连)在外(DERP 中继)都能用,TLS 自动配置,手机优先布局,支持远程工作区选择器,无需 `--trusted-host`。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH)插件:把 DSH 网页 GUI 通过 **Tailscale tailnet** 暴露出去——手机、平板、tailnet 里的任何浏览器,同一个网址都能用。在家(Wi-Fi 直连)在外(DERP 中继)都行,TLS 自动配置,支持远程工作区选择器,无需 `--trusted-host`。
 
 > **兼容目标**:Windows · DSH `0.1.0-rc.8`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重跑 `npm run check:all`,再视为已验证。
 
@@ -33,22 +33,22 @@ dsh web
 
 ```
 dsh web: http://127.0.0.1:3080
-tailscale-serve: added <machine>.<tailnet>.ts.net to the DSH /api trust fence
-tailscale-serve: DSH web is now reachable on your tailnet: https://<machine>.<tailnet>.ts.net
+dsh-remote: added <machine>.<tailnet>.ts.net to the DSH /api trust fence
+dsh-remote: DSH web is now reachable on your tailnet: https://<machine>.<tailnet>.ts.net
 ```
 
 手机浏览器打开这个网址,完事。`DSH web is now reachable` 只在 Serve 命令成功退出**且** Tailscale 节点级配置里出现完全符合预期的代理路由后才打印——仅凭 tailnet DNS 名不会当作成功。
 
-> **若 `dsh plugin` 报 `ENOENT ... scandir '<profile>\D:\...'`**(pnpm 10 错误解盘符 `file:`/`link:` 规范):在 `$env:USERPROFILE\.dsh\profiles\web` 里手动 `pnpm add "link:<路径>"`,再把 `"dsh-tailscale-serve"` 追加到该目录 `package.json` 的 `dsh.profile.bundles` 数组。
+> **若 `dsh plugin` 报 `ENOENT ... scandir '<profile>\D:\...'`**(pnpm 10 错误解盘符 `file:`/`link:` 规范):在 `$env:USERPROFILE\.dsh\profiles\web` 里手动 `pnpm add "link:<路径>"`,再把 `"dsh-remote"` 追加到该目录 `package.json` 的 `dsh.profile.bundles` 数组。
 
-## 手机使用
+## 远程使用
 
-1. 手机打开 Tailscale App,确认设备**在线**。
-2. 手机浏览器打开 `https://<machine>.<tailnet>.ts.net`。
-3. 聊天、工具调用、交付物**实时**流式呈现——和电脑上同一个会话。新建工作区会打开插件的虚拟**此电脑**视图:选盘符、浏览真实目录、可新建并选择。电脑自己的页面保持原生系统目录对话框。
+1. 设备上打开 Tailscale App,确认**在线**。
+2. 浏览器打开 `https://<machine>.<tailnet>.ts.net`——手机、平板、另一台电脑都行。
+3. 聊天、工具调用、交付物**实时**流式呈现——和电脑上同一个会话。新建工作区会打开插件的虚拟**此电脑**视图:选盘符、浏览真实目录、可新建并选择。主机电脑自己的页面保持原生系统目录对话框。
 4. 同一网址在外网也能用:没有直连路径时 Tailscale 走 DERP 中继。
 
-手机**不需要**运行 DSH 或任何插件——只需要 Tailscale 成员身份。移动适配层的修改与验证(选择器策略、两个已知的坑、验证套件)见 [docs/HOW-IT-WORKS.zh-CN.md](docs/HOW-IT-WORKS.zh-CN.md)。
+远程设备**不需要**运行 DSH 或任何插件——只需要 Tailscale 成员身份。移动适配层的修改与验证(选择器策略、两个已知的坑、验证套件)见 [docs/HOW-IT-WORKS.zh-CN.md](docs/HOW-IT-WORKS.zh-CN.md)。
 
 ## 配置
 
@@ -82,7 +82,7 @@ tailnet 就是门禁:Tailscale 身份、ACL 和 TLS 决定谁能到达页面—�
 ## 卸载
 
 ```powershell
-dsh plugin --profile web remove dsh-tailscale-serve
+dsh plugin --profile web remove dsh-remote
 ```
 
 `dsh plugin remove` 转发给 pnpm **并**自动清理 `dsh.profile.bundles` 层叠条目——这一条命令就是完整卸载。只有两样它不知道的残留:
@@ -93,7 +93,7 @@ dsh plugin --profile web remove dsh-tailscale-serve
 tailscale serve --yes --https=443 --set-path=/ off
 
 # 仅当插件是用 tarball 装的:删掉拷贝过去的压缩包
-Remove-Item "$env:USERPROFILE\.dsh\profiles\web\dsh-tailscale-serve-*.tgz"
+Remove-Item "$env:USERPROFILE\.dsh\profiles\web\dsh-remote-*.tgz"
 ```
 
 之后不再需要源码的话,把插件目录本身删掉即可。
@@ -104,4 +104,4 @@ MIT,全文见 `LICENSE`。
 
 ## 发布
 
-源码在 [github.com/RexVane/dsh-tailscale-serve](https://github.com/RexVane/dsh-tailscale-serve)。`package.json` 的 `repository`、`homepage`、`bugs` 已指向它。
+源码在 [github.com/RexVane/dsh-remote](https://github.com/RexVane/dsh-remote)。`package.json` 的 `repository`、`homepage`、`bugs` 已指向它。

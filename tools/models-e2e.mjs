@@ -162,7 +162,7 @@ report("editor reloads the saved value", reopened?.name1 === NEW_NAME, `after sa
 console.log("\n[2] verify persistence via server (tailnet path)");
 const verify = () => {
 	const body = JSON.stringify({ type: "client-request", rpcId: "v1", method: "settingsDescribe", payload: {} });
-	const out = execFileSync("curl", ["-s", "--noproxy", "*", "-X", "POST", origin.replace(/\/$/, "") + "/tailscale-serve/settingsDescribe", "-H", "content-type: application/json", "-d", body], { encoding: "utf8" });
+	const out = execFileSync("curl", ["-s", "--noproxy", "*", "-X", "POST", origin.replace(/\/$/, "") + "/dsh-remote/settingsDescribe", "-H", "content-type: application/json", "-d", body], { encoding: "utf8" });
 	const j = JSON.parse(out);
 	const ns = (j.result?.value?.namespaces ?? []).find((n) => n.ns === "llm-deepseek");
 	return ns?.value?.models?.[0]?.name ?? null;

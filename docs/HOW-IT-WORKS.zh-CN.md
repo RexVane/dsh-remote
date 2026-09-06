@@ -84,7 +84,7 @@ dsh web --trusted-host <machine>.<tailnet>.ts.net
 
 围栏是 DNS 重绑定防御,**不是认证层**。本插件只把 tailnet 主机名加进 trusted-host 列表;DSH 依旧只绑 `127.0.0.1`,全部暴露面由 Tailscale 的 tailnet 成员身份、ACL 和(默认)TLS 把守。
 
-具体说,在本插件适配的 DSH 构建上(已在 `0.1.1-rc.2` 验证),插件的 `/tailscale-serve` 通道**没有用户级认证**——没有 cookie、没有会话、没有 401 层。围栏只挡 DNS 重绑定和跨站浏览器请求。tailnet 上任何能到达 Serve 端口、能把 tailnet 主机名写成 `Host` 头的客户端——包括非浏览器工具——都能直接调用 `listDrives`/`listDirectory`/`createDirectory` 和被代理的设置切片。tailnet 成员身份、ACL 和 TLS 是本插件暴露的一切的全部安全模型。
+具体说,在本插件适配的 DSH 构建上(已在 `0.1.1-rc.2` 验证),插件的 `/dsh-remote` 通道**没有用户级认证**——没有 cookie、没有会话、没有 401 层。围栏只挡 DNS 重绑定和跨站浏览器请求。tailnet 上任何能到达 Serve 端口、能把 tailnet 主机名写成 `Host` 头的客户端——包括非浏览器工具——都能直接调用 `listDrives`/`listDirectory`/`createDirectory` 和被代理的设置切片。tailnet 成员身份、ACL 和 TLS 是本插件暴露的一切的全部安全模型。
 
 DSH rc.8 对配置面方法还有第二道更窄的边界。`host.pickDirectory`、`host.openPath`、`settings.*`、`credentials.*`、`llm.discoverModels` 等调用要求回环同源请求,无视普通 trusted-host 列表。已配置好的非机密模型目录(`llm.providers`/`llm.models`)是另一条浏览器安全面;它不会让提供方设置或模型发现动作变成远程可写。所以手机 `*.ts.net` 页面上选择原生 picker 时,报这个错是预期行为:
 
@@ -100,7 +100,7 @@ HTTP 403
 
 手机 picker 是功能访问,不是文件系统沙箱:Windows 从就绪的盘符根开始;其他主机、或盘符探测失败/为空时,回退到主机账户的主目录。它接受全限定路径,没有部署级的浏览根限制。请把 Tailscale ACL 限定到你信任其接触 DSH、也信任其查看该账户目录的设备/用户。
 
-如果手机仍然调用 `pickDirectory`,确认它用的是 `*.ts.net` 网址而不是 `127.0.0.1`、`dsh-tailscale-serve` 客户端 bundle 处于活动状态、且当前插件版本提供 `/tailscale-serve/listDrives`。最终组合应保持原生 `directory-picker` 条目启用;不要用浏览后端全局替换它,那会连电脑一起改掉。
+如果手机仍然调用 `pickDirectory`,确认它用的是 `*.ts.net` 网址而不是 `127.0.0.1`、`dsh-remote` 客户端 bundle 处于活动状态、且当前插件版本提供 `/dsh-remote/listDrives`。最终组合应保持原生 `directory-picker` 条目启用;不要用浏览后端全局替换它,那会连电脑一起改掉。
 
 ## 插件是怎么工作的
 
@@ -110,7 +110,7 @@ HTTP 403
 - **Windows LocalAPI 传输**:Tailscale 的受保护命名管道要求客户端请求 `Identification` 模拟级别。Node 普通的 `socketPath` 传输不设置它,所以插件仅对本地管道连接使用内置的 Windows PowerShell/.NET 桥。这保住了 Tailscale 的认证检查;不提权、不改策略、不绕过 LocalAPI 授权。类 Unix 系统继续直接用原生 Unix socket。
 - **Serve**:HTTPS 模式执行显式 `tailscale serve --bg --yes --https=443 <target>`;HTTP 模式用 `--http=80`。目标始终是真实的 DSH 监听(含主机),所以仅 IPv6 或不匹配的绑定不可能静默变成一个成功返回 502 的端点。CLI 退出码 0 之后,插件重读 `Web/TCP`,在宣告之前做一次全新的路由/监听/Funnel 终检,从实际路由(而非 hostname 提示)推导端点,并验证精确的代理路由。若这期间 Funnel 被启用,插件用带 ETag 守护的安全回滚只移除自己的 handler,不宣告端点。
 - **信任围栏**:把解析出的 tailnet 主机名(`<machine>.<tailnet>.ts.net`)推进 `webRuntime.trustedHosts`,已应用的 `/api` 围栏每次请求读取它(同一数组引用)。
-- **分离式目录选择器**:电脑保留 DSH 原生目录选择器后端与客户端。非回环页面上,插件注册一个目录流占用者,其 bundle 晚于 DSH 原生 picker 加载;运行时对单槽位的后注册者分配更低的自动遮蔽优先级,所以插件流在手机页胜出,原生客户端留在回环电脑页。目录枚举与子目录创建走 `/tailscale-serve`,`trusted-host` 权限、严格全限定路径检查、1000 条上限。
+- **分离式目录选择器**:电脑保留 DSH 原生目录选择器后端与客户端。非回环页面上,插件注册一个目录流占用者,其 bundle 晚于 DSH 原生 picker 加载;运行时对单槽位的后注册者分配更低的自动遮蔽优先级,所以插件流在手机页胜出,原生客户端留在回环电脑页。目录枚举与子目录创建走 `/dsh-remote`,`trusted-host` 权限、严格全限定路径检查、1000 条上限。
 - **静态传输增强**:插件包装 webServer 的请求监听器,给 `/assets` 和 `/plugins` 的 GET 响应加上 Brotli 压缩(客户端不支持 `br` 时退回 gzip)、ETag 和缓存头——带指纹的名字(含每个 `?rev=` 插件 bundle URL)是 `immutable`,其余用 304 重验证。DSH 原本都没有,DERP 中继下手机每次打开页面都要重新下载约 4.4MB 启动负载;增强后核心资源首次加载约 0.4MB,重复加载接近零。Serve 路由验证成功后,插件还会从 DSH 自己的 `index.html` 预热响应缓存,DSH 重启后的首次手机加载不用付现压成本。增强按请求的 Host 头门控:只有非回环(tailnet)请求享受,电脑的 `127.0.0.1` 浏览器仍收到 DSH 字节级一致的原生响应。响应体逐字节相同,`/api` 与事件流原样通过,且增强只在插件启用时运行。
 - **清理**:正常 dispose 时只移除本进程验证拥有的 `/` handler。更新基于最新配置构建并以 `If-Match: <ETag>` 提交;并发变更返回 HTTP 412,从新状态重试,所以无关路由被保留而非替换。若根 handler 或监听模式变了,清理停止、不写入。若同端口 Funnel 状态变了,清理执行仅 handler 的安全移除,保留当前 TCP/Funnel 监听;从不禁用其他进程的 Funnel。`keepOnExit:true` 跳过移除。
 
@@ -124,9 +124,9 @@ HTTP 403
 
 | 症状 | 原因 / 处理 |
 |---|---|
-| `tailscale-serve: warning: tailscale CLI not found` | Tailscale 装在了不常见的位置。设置 `serveArgs` 不够——把 CLI 目录加进 PATH,或带着安装路径开 issue。 |
+| `dsh-remote: warning: tailscale CLI not found` | Tailscale 装在了不常见的位置。设置 `serveArgs` 不够——把 CLI 目录加进 PATH,或带着安装路径开 issue。 |
 | 手机页面能打开但聊天没反应 / "不是实时的" | `/api` 围栏在拒绝主机。旧插件代码下这是预期的——**重启 DSH** 让信任围栏注入运行,并找启动日志里的 `added ... trust fence` 行。 |
-| 手机上 `transport failure for /api/host, pickDirectory` / HTTP 403 | 远程目录流客户端没加载,原生流赢了。确认手机用 `*.ts.net` 网址、调和/重装本插件、重启 DSH,并确认 `/tailscale-serve/listDrives` 可用。保持 DSH 原生 `directory-picker` 启用;不要用全局替换电脑 picker 的方式解决。 |
+| 手机上 `transport failure for /api/host, pickDirectory` / HTTP 403 | 远程目录流客户端没加载,原生流赢了。确认手机用 `*.ts.net` 网址、调和/重装本插件、重启 DSH,并确认 `/dsh-remote/listDrives` 可用。保持 DSH 原生 `directory-picker` 启用;不要用全局替换电脑 picker 的方式解决。 |
 | 模型/设置页或模型发现动作报 HTTP 403 | DSH 把提供方设置、凭据、设置变更、`llm.discoverModels` 锁在回环。插件经可信通道代理一小片:模型发现、只读 describe 视图、`agent-presets` 命名空间的 `settings.update`,以及完整模型配置保存路径(`llm-*` 上的 `settings.mutate` + `credentials.set`/`unset`/`describe`)。其余必须在主机 `127.0.0.1` UI 配置。**更新插件后重启 DSH,服务端端点才会加载。** |
 | Windows 上 `tailscale serve status` 说 `Access is denied` | 当前账户能查节点状态但无权检查/管理 Serve。用提升/授权账户跑 `dsh web`,或按那个 Tailscale 版本支持的方式配置 operator。 |
 | `tailscale serve status --json` 输出 `{}` | 这是合法的空 Serve 配置,不是错误。启动/重启 `dsh web`;插件应创建并验证 DSH 路由。 |

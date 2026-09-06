@@ -1,8 +1,8 @@
-# dsh-tailscale-serve
+# dsh-remote
 
 English | [简体中文](README.zh-CN.md)
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that exposes the web GUI over your **Tailscale tailnet** — one URL that works on **Wi-Fi (direct)** and **away (DERP relay)**, with automatic TLS, a phone-first layout, a remote workspace picker, and no `--trusted-host` flag.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that exposes the web GUI over your **Tailscale tailnet** — one URL for the phone, the tablet, or any browser on your tailnet. Works on **Wi-Fi (direct)** and **away (DERP relay)**, with automatic TLS, a remote workspace picker, and no `--trusted-host` flag.
 
 > **Compatibility:** Windows · DSH `0.1.0-rc.8` (fence/RPC behaviour additionally verified on `0.1.1-rc.2`) · Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`. Re-run `npm run check:all` after every DSH upgrade before trusting the selector-sensitive mobile layer.
 
@@ -33,22 +33,22 @@ On startup you should see:
 
 ```
 dsh web: http://127.0.0.1:3080
-tailscale-serve: added <machine>.<tailnet>.ts.net to the DSH /api trust fence
-tailscale-serve: DSH web is now reachable on your tailnet: https://<machine>.<tailnet>.ts.net
+dsh-remote: added <machine>.<tailnet>.ts.net to the DSH /api trust fence
+dsh-remote: DSH web is now reachable on your tailnet: https://<machine>.<tailnet>.ts.net
 ```
 
 Open that URL in the phone browser and you are done. `DSH web is now reachable` is printed only after the Serve command succeeded **and** Tailscale's node-level config contains the exact expected proxy route — a visible tailnet DNS name alone is never treated as success.
 
-> **If `dsh plugin` fails with `ENOENT ... scandir '<profile>\D:\...'`** (pnpm 10 mis-resolves drive-letter `file:`/`link:` specs): install manually with `pnpm add "link:<path>"` inside `$env:USERPROFILE\.dsh\profiles\web`, then append `"dsh-tailscale-serve"` to the `dsh.profile.bundles` array in that directory's `package.json`.
+> **If `dsh plugin` fails with `ENOENT ... scandir '<profile>\D:\...'`** (pnpm 10 mis-resolves drive-letter `file:`/`link:` specs): install manually with `pnpm add "link:<path>"` inside `$env:USERPROFILE\.dsh\profiles\web`, then append `"dsh-remote"` to the `dsh.profile.bundles` array in that directory's `package.json`.
 
-## Phone usage
+## Remote usage
 
-1. Open the Tailscale app on the phone and confirm the device is **online**.
-2. Open `https://<machine>.<tailnet>.ts.net` in the phone browser.
-3. Chat, tool calls, and deliverables stream **live** — the same session as the PC. Creating a workspace opens the plugin's virtual **This PC** view: pick a drive, browse real folders, create one, select it. The PC's own page keeps the native OS folder dialog.
+1. Open the Tailscale app on the device and confirm it is **online**.
+2. Open `https://<machine>.<tailnet>.ts.net` in its browser — phone, tablet, or another computer.
+3. Chat, tool calls, and deliverables stream **live** — the same session as the PC. Creating a workspace opens the plugin's virtual **This PC** view: pick a drive, browse real folders, create one, select it. The host PC's own page keeps the native OS folder dialog.
 4. Same URL works away from home: Tailscale relays through DERP when there is no direct path.
 
-The phone does **not** need to run DSH or any plugin — only Tailscale membership. Editing or verifying the mobile-fit layer (selector strategy, the two known traps, the verification suites) is documented in [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+Remote devices do **not** need to run DSH or any plugin — only Tailscale membership. Editing or verifying the mobile-fit layer (selector strategy, the two known traps, the verification suites) is documented in [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
 ## Configuration
 
@@ -82,7 +82,7 @@ The full symptom table lives in [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 ## Uninstall
 
 ```powershell
-dsh plugin --profile web remove dsh-tailscale-serve
+dsh plugin --profile web remove dsh-remote
 ```
 
 `dsh plugin remove` forwards to pnpm **and** prunes the `dsh.profile.bundles` layer entry, so this one command is the complete uninstall. Two leftovers it cannot know about:
@@ -93,7 +93,7 @@ dsh plugin --profile web remove dsh-tailscale-serve
 tailscale serve --yes --https=443 --set-path=/ off
 
 # only if the plugin was installed from a tarball: drop the copied archive
-Remove-Item "$env:USERPROFILE\.dsh\profiles\web\dsh-tailscale-serve-*.tgz"
+Remove-Item "$env:USERPROFILE\.dsh\profiles\web\dsh-remote-*.tgz"
 ```
 
 Then delete the plugin directory itself if you no longer want the source.
@@ -104,4 +104,4 @@ MIT. See `LICENSE` for the full text.
 
 ## Publishing
 
-Source lives at [github.com/RexVane/dsh-tailscale-serve](https://github.com/RexVane/dsh-tailscale-serve). `repository`, `homepage`, and `bugs` in `package.json` already point at it.
+Source lives at [github.com/RexVane/dsh-remote](https://github.com/RexVane/dsh-remote). `repository`, `homepage`, and `bugs` in `package.json` already point at it.

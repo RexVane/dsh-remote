@@ -1,7 +1,7 @@
-# dsh-tailscale-serve — bundle patch layer.
+# dsh-remote — bundle patch layer.
 #
 # A self-registering DSH bundle: this patch is applied as a composition layer
-# once `dsh plugin --profile web add dsh-tailscale-serve` reconciles the package
+# once `dsh plugin --profile web add dsh-remote` reconciles the package
 # (its package.json declares `dsh.bundle.patch`). The single row below mounts
 # the plugin.
 #
@@ -22,8 +22,8 @@
 # web-GUI-only plugin.
 
 - insert:
-    - id: tailscale-serve
-      name: 'dsh-tailscale-serve'
+    - id: dsh-remote
+      name: 'dsh-remote'
       config:
         # Master switch. Set false to keep DSH on loopback only.
         enabled: true
@@ -55,5 +55,5 @@
 #
 # The plugin client shadows that native directory-flow only on a non-loopback
 # page (the phone's Tailscale URL). Its directory list/create operations use the
-# plugin's own `/tailscale-serve` trusted RPC channel, so the Host can retain the
+# plugin's own `/dsh-remote` trusted RPC channel, so the Host can retain the
 # native picker capability while the phone gets the in-page "This PC" browser.
