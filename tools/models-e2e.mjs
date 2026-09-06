@@ -8,7 +8,7 @@
  * transport-failure bug this guards against).
  *
  * Requires the DSH web server to be running with this plugin active.
- * Usage: node tools/models-e2e.mjs [origin]
+ * Usage: node tools/models-e2e.mjs <origin>   # e.g. https://<machine>.<tailnet>.ts.net/
  */
 
 import { spawn, execFileSync } from "node:child_process";
@@ -18,7 +18,11 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const origin = process.argv[2] ?? "https://windows.tail31253f.ts.net/";
+const origin = process.argv[2];
+if (!origin || !origin.startsWith("http")) {
+	console.log("usage: node tools/models-e2e.mjs <origin>   # e.g. https://<machine>.<tailnet>.ts.net/");
+	process.exit(1);
+}
 const BROWSERS = [
 	`${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`,
 	`${process.env["ProgramFiles(x86)"]}\\Microsoft\\Edge\\Application\\msedge.exe`,

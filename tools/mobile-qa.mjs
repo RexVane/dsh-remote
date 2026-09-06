@@ -19,8 +19,7 @@
  * put; the directory picker is opened and cancelled, never submitted.
  *
  * Usage:
- *   node tools/mobile-qa.mjs            # tailnet URL
- *   node tools/mobile-qa.mjs <origin>   # e.g. http://127.0.0.1:3080
+ *   node tools/mobile-qa.mjs <origin>   # e.g. https://<machine>.<tailnet>.ts.net/
  */
 
 import { spawn } from "node:child_process";
@@ -30,7 +29,11 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const origin = process.argv[2] ?? "https://windows.tail31253f.ts.net/";
+const origin = process.argv[2];
+if (!origin || !origin.startsWith("http")) {
+	console.log("usage: node tools/mobile-qa.mjs <origin>   # e.g. https://<machine>.<tailnet>.ts.net/");
+	process.exit(1);
+}
 
 const BROWSERS = [
 	`${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`,

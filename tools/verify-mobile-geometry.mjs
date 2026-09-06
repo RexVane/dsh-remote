@@ -13,13 +13,13 @@
  * clicks anything that would create a session or mutate state.
  *
  * Usage:
- *   node tools/verify-mobile-geometry.mjs [origin] [--keep-shots]
+ *   node tools/verify-mobile-geometry.mjs <origin> [--keep-shots]
  *   node tools/verify-mobile-geometry.mjs https://<machine>.<tailnet>.ts.net
  *   node tools/verify-mobile-geometry.mjs https://<machine>.<tailnet>.ts.net --no-sandbox
  *
- * The default origin is the tailnet URL on purpose: the mobile-fit client half
- * mounts only on non-loopback pages, so a loopback origin now measures DSH's
- * stock (unadapted) layout by design.
+ * The origin is a required argument: the mobile-fit client half mounts only
+ * on non-loopback pages, so a loopback origin measures DSH's stock
+ * (unadapted) layout by design.
  */
 
 import { spawn } from "node:child_process";
@@ -30,7 +30,11 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
-const origin = args.find((a) => a.startsWith("http")) ?? "https://windows.tail31253f.ts.net/";
+const origin = args.find((a) => a.startsWith("http"));
+if (!origin) {
+	console.log("usage: node tools/verify-mobile-geometry.mjs <origin> [--keep-shots] [--no-sandbox]");
+	process.exit(1);
+}
 const keepShots = args.includes("--keep-shots");
 // Opt-in only: some managed/CI Windows sessions terminate headless Chrome as
 // soon as CDP enables the page domain unless the browser sandbox is disabled.

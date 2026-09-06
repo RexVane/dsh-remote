@@ -927,7 +927,7 @@ test("static enhancer gzips, tags and caches /assets and /plugins responses", as
 	assert.equal(listeners.length, 1);
 	const enhanced = listeners[0];
 	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
-	const gzipGet = { method: "GET", headers: { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" }, destroyed: false };
+	const gzipGet = { method: "GET", headers: { "accept-encoding": "gzip", host: "phone.example.ts.net" }, destroyed: false };
 
 	const first = makeRes();
 	await enhanced({ ...gzipGet, url: "/assets/index-abc123.js" }, first);
@@ -1015,7 +1015,7 @@ test("static enhancer leaves non-cacheable and /api responses byte-identical", a
 	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
 
 	const api = makeRes();
-	await enhanced({ method: "POST", url: "/api/thing", headers: { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" }, destroyed: false }, api);
+	await enhanced({ method: "POST", url: "/api/thing", headers: { "accept-encoding": "gzip", host: "phone.example.ts.net" }, destroyed: false }, api);
 	assert.equal(api.status, 200);
 	// below the gzip threshold, so raw bytes — but unary /api JSON carries an
 	// ETag now (0.3.0): revalidation without re-downloading
@@ -1024,7 +1024,7 @@ test("static enhancer leaves non-cacheable and /api responses byte-identical", a
 	assert.equal(Buffer.concat(api.chunks).toString(), '{"ok":true}');
 
 	const png = makeRes();
-	await enhanced({ method: "GET", url: "/plugins/some/icon.png", headers: { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" }, destroyed: false }, png);
+	await enhanced({ method: "GET", url: "/plugins/some/icon.png", headers: { "accept-encoding": "gzip", host: "phone.example.ts.net" }, destroyed: false }, png);
 	assert.equal(png.headers["content-encoding"], undefined);
 	assert.equal(png.headers.etag, undefined);
 	assert.equal(png.headers["cache-control"], undefined);
@@ -1058,7 +1058,7 @@ test("static enhancer compresses unary /api JSON and passes streams through", as
 	const dispose = installStaticEnhancer({ webServer: { server } });
 	const enhanced = listeners[0];
 	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, write(c) { this.chunks.push(Buffer.from(c)); }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
-	const phone = { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" };
+	const phone = { "accept-encoding": "gzip", host: "phone.example.ts.net" };
 
 	// a big unary JSON response from a phone host: gzipped with an ETag
 	const history = makeRes();
@@ -1128,7 +1128,7 @@ test("static enhancer keeps gzip on slow-to-build session.list but bails to live
 	const dispose = installStaticEnhancer({ webServer: { server } });
 	const enhanced = listeners[0];
 	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, write(c) { this.chunks.push(Buffer.from(c)); }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
-	const phone = { "accept-encoding": "gzip", host: "windows.tail31253f.ts.net" };
+	const phone = { "accept-encoding": "gzip", host: "phone.example.ts.net" };
 
 	const listing = makeRes();
 	await enhanced({ method: "POST", url: "/api/session.list", headers: { ...phone }, destroyed: false }, listing);
