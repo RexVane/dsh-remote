@@ -19,7 +19,7 @@ The phone installs Tailscale, joins the same tailnet, and opens the URL. On Wi-F
 ## Prerequisites
 
 1. **Tailscale** installed and logged in on the DSH host (`tailscale up`). The plugin locates the CLI automatically in the common install locations; a PATH entry is not required (see [How it works](#how-it-works)).
-2. **Tailscale** installed on the phone, joined to the **same tailnet**. The phone must be **online** — an offline device cannot reach the tailnet, by design.
+2. **Tailscale** installed on the phone, joined to the **same tailnet**. The phone must be **online** — an offline device cannot reach the tailnet.
 3. **MagicDNS** enabled. HTTPS Serve certificates and the verified URL use the node's `*.ts.net` name; the plugin deliberately does not report an HTTPS IP URL that would fail certificate validation.
 4. `tailscale serve` support — verify with `tailscale serve --help` (Tailscale ≥ 1.50 recommended).
 5. **Permission to manage Tailscale Serve from the account that runs DSH.** On Windows, run the following from the same PowerShell session/account you will use for `dsh web`:

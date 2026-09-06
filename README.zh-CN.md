@@ -19,7 +19,7 @@ DSH 把网页 UI 绑定在 `127.0.0.1`,并刻意拒绝 `--host 0.0.0.0`——它
 ## 前提条件
 
 1. **DSH 主机**装好 Tailscale 并登录(`tailscale up`)。插件会自动在常见位置找 CLI,不需要改 PATH(见[工作原理](#工作原理))。
-2. **手机**装 Tailscale 并加入**同一 tailnet**,且保持**在线**——离线设备无法访问 tailnet,这是设计使然。
+2. **手机**装 Tailscale 并加入**同一 tailnet**,且保持**在线**——离线设备无法访问 tailnet。
 3. 开启 **MagicDNS**。HTTPS 证书和验证过的网址都使用节点的 `*.ts.net` 域名;插件刻意不报告会证书校验失败的 HTTPS IP 地址。
 4. 支持 `tailscale serve`——用 `tailscale serve --help` 确认(建议 Tailscale ≥ 1.50)。
 5. **运行 DSH 的账户有权管理 Tailscale Serve。** Windows 下,在与 `dsh web` 相同的 PowerShell 会话/账户里执行:
