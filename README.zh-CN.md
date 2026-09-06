@@ -4,15 +4,15 @@
 
 一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH)插件:把 DSH 网页 GUI 通过 **Tailscale tailnet** 暴露出去——手机、平板、tailnet 里的任何浏览器,同一个网址都能用。在家(Wi-Fi 直连)在外(DERP 中继)都行,TLS 自动配置,支持远程工作区选择器,无需 `--trusted-host`。
 
-> **兼容目标**:Windows · DSH `0.1.0-rc.8`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重跑 `npm run check:all`,再视为已验证。
+> **兼容目标**:Windows · DSH `0.1.0-rc.8`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重新运行 `npm run check:all`,再视为已验证。
 
 ## 前提条件
 
-**电脑和手机都装 Tailscale,登录同一个账号**(即同一个 tailnet)——电脑跑 DSH,手机打开网址,就这两步。
+**电脑和手机都安装 Tailscale,登录同一个账号**(即同一个 tailnet)——电脑运行 DSH,设备访问该网址。
 
-偶尔会咬人的只有两件:
+此外还需满足两点:
 
-1. 运行 `dsh web` 的账户要有权管理 Tailscale Serve——用该账户跑一下 `tailscale serve status --json` 确认(输出 `{}` 即正常)。若返回 `Access is denied`,用管理员 shell 运行 DSH,或给该账户授予 Serve/operator 权限(见[故障排查](#故障排查))。
+1. 运行 `dsh web` 的账户要有权管理 Tailscale Serve——使用该账户执行 `tailscale serve status --json` 确认(输出 `{}` 即正常)。若返回 `Access is denied`,用管理员 shell 运行 DSH,或给该账户授予 Serve/operator 权限(见[故障排查](#故障排查))。
 2. Node.js 22.19+(主版本 22 内)或 24+——DSH 本身要求的范围。
 
 ## 安装
@@ -37,7 +37,7 @@ dsh-remote: added <machine>.<tailnet>.ts.net to the DSH /api trust fence
 dsh-remote: DSH web is now reachable on your tailnet: https://<machine>.<tailnet>.ts.net
 ```
 
-手机浏览器打开这个网址,完事。`DSH web is now reachable` 只在 Serve 命令成功退出**且** Tailscale 节点级配置里出现完全符合预期的代理路由后才打印——仅凭 tailnet DNS 名不会当作成功。
+在设备浏览器中打开该网址即可完成配置。`DSH web is now reachable` 只在 Serve 命令成功退出**且** Tailscale 节点级配置里出现完全符合预期的代理路由后才打印——仅凭 tailnet DNS 名不会当作成功。
 
 > **若 `dsh plugin` 报 `ENOENT ... scandir '<profile>\D:\...'`**(pnpm 10 错误解盘符 `file:`/`link:` 规范):在 `$env:USERPROFILE\.dsh\profiles\web` 里手动 `pnpm add "link:<路径>"`,再把 `"dsh-remote"` 追加到该目录 `package.json` 的 `dsh.profile.bundles` 数组。
 
@@ -74,7 +74,7 @@ tailnet 就是门禁:Tailscale 身份、ACL 和 TLS 决定谁能到达页面—�
 | 手机上 `pickDirectory` / HTTP 403 | 远程目录流没加载——确认手机用 `*.ts.net` 网址,重启 DSH。 |
 | 模型/设置页报 HTTP 403 | **更新插件后重启 DSH**,服务端端点才会加载。 |
 | 手机完全打不开网址 | 手机 Tailscale 离线,或不在同一 tailnet。两端各查一次 `tailscale status`。 |
-| DSH 升级后布局不对 | 跑 `npm run verify`——它会点名每条失配规则。 |
+| DSH 升级后布局不对 | 运行 `npm run verify`——它会列出每条失配规则。 |
 | 布局可疑,不确定是不是本插件 | 用 `?nomobilefit=1` 重载以禁用适配,对比。 |
 
 完整故障表见 [docs/HOW-IT-WORKS.zh-CN.md](docs/HOW-IT-WORKS.zh-CN.md)。

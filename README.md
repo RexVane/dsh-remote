@@ -10,7 +10,7 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plug
 
 **Install Tailscale on the PC and the phone and log both into the same Tailscale account** (that is, the same tailnet) — the PC runs DSH, the phone opens the URL. That is the whole setup.
 
-Two things that occasionally bite:
+Two additional requirements:
 
 1. The account that runs `dsh web` must be allowed to manage Tailscale Serve — check with `tailscale serve status --json` from that account (an empty `{}` is fine). If it returns `Access is denied`, run DSH from an elevated shell or grant the account Serve/operator access (see [Troubleshooting](#troubleshooting)).
 2. Node.js 22.19+ (within major 22) or 24+ — the range DSH itself requires.
@@ -37,7 +37,7 @@ dsh-remote: added <machine>.<tailnet>.ts.net to the DSH /api trust fence
 dsh-remote: DSH web is now reachable on your tailnet: https://<machine>.<tailnet>.ts.net
 ```
 
-Open that URL in the phone browser and you are done. `DSH web is now reachable` is printed only after the Serve command succeeded **and** Tailscale's node-level config contains the exact expected proxy route — a visible tailnet DNS name alone is never treated as success.
+Open that URL in the device browser and the setup is complete. `DSH web is now reachable` is printed only after the Serve command succeeded **and** Tailscale's node-level config contains the exact expected proxy route — a visible tailnet DNS name alone is never treated as success.
 
 > **If `dsh plugin` fails with `ENOENT ... scandir '<profile>\D:\...'`** (pnpm 10 mis-resolves drive-letter `file:`/`link:` specs): install manually with `pnpm add "link:<path>"` inside `$env:USERPROFILE\.dsh\profiles\web`, then append `"dsh-remote"` to the `dsh.profile.bundles` array in that directory's `package.json`.
 
