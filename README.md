@@ -1,8 +1,10 @@
 # dsh-tailscale-serve
 
+English | [简体中文](README.zh-CN.md)
+
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that exposes the web GUI over your **Tailscale tailnet** — one URL that works on **Wi-Fi (direct)** and **away (DERP relay)**, with automatic TLS, and no `--trusted-host` flag.
 
-> **Compatibility target:** Windows, DSH `0.1.0-rc.8`, Tailscale `1.102.x`, and Node.js `^22.19.0 || >=24.0.0` (the range declared by DSH rc.8). The static suite has been checked against the current rc.8 installation, and the trust-fence and private-RPC-channel behaviour described here was additionally verified against an installed DSH `0.1.1-rc.2`. The retained phone screenshots and mobile-fit audit came from an earlier live run; rerun `npm run check:all` against the installed DSH after every DSH upgrade before treating the selector-sensitive mobile layer as verified.
+> **Compatibility:** Windows · DSH `0.1.0-rc.8` (fence/RPC behaviour additionally verified on `0.1.1-rc.2`) · Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`. Re-run `npm run check:all` after every DSH upgrade before trusting the selector-sensitive mobile layer.
 
 ## Why
 
@@ -264,4 +266,4 @@ MIT. See `LICENSE` for the full text.
 
 ## Publishing
 
-Source lives at [github.com/RexVane/dsh-tailscale-serve](https://github.com/RexVane/dsh-tailscale-serve) — private while the QA tool defaults embed this deployment's tailnet hostname; parameterize those before making it public. `repository`, `homepage`, and `bugs` in `package.json` already point at it.
+Source lives at [github.com/RexVane/dsh-tailscale-serve](https://github.com/RexVane/dsh-tailscale-serve). `repository`, `homepage`, and `bugs` in `package.json` already point at it.
