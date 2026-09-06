@@ -35,7 +35,7 @@ DSH 的 CSS modules 类名带每构建哈希,且有**两种命名方案**,都要
 
 第二种形式的结尾下划线是结构性的,不是笔误。后缀跨 bundle 不唯一时,规则锚定在该元素必然包含的子元素上(`:has()`)。禁止字面 CSS-module 构建哈希;静态校验器会拒绝它们,升级就不会留下失效的构建专属分支。
 
-两个容易踩的坑:
+两个容易违反的约束:
 
 - **不要在 `CSS` 模板字面量里输入反引号。** 它会提前终止字面量,弄坏整个插件。
 - **匹配不到任何东西的规则会静默失败。** 无报错、无警告,桌面端审查看起来一切正常。
@@ -47,8 +47,8 @@ DSH 的 CSS modules 类名带每构建哈希,且有**两种命名方案**,都要
 ```powershell
 npm run check        # 语法检查、服务端测试、静态移动校验器
 npm run verify       # 仅静态校验器(可离线)
-npm run verify:live  # 用真实无头浏览器跑手机宽度矩阵
-npm run check:all    # 两套全跑
+npm run verify:live  # 用真实无头浏览器执行手机宽度矩阵
+npm run check:all    # 两套全部执行
 ```
 
 **`npm run verify`** 在桩浏览器里加载 `lib/client.js`,断言生成的 CSS 括号平衡、完整位于 `@media` 守卫内、没有杂散反引号破坏字面量、**每一条** `[class*="…"]` 选择器仍出现在运行中的 DSH 实际提供的 bundle 里,并确认两个历史回归保持修复。连不上 DSH 时跳过实机选择器部分并明确说明。
@@ -64,7 +64,7 @@ node tools/verify-mobile-geometry.mjs https://host.tailnet.ts.net --keep-shots
 
 在托管 CI/沙箱会话中 Chrome 一连上 CDP 就退出时,加 `--no-sandbox`。这是仅限验证场景的显式逃生门;本地正常使用保持浏览器沙箱开启。
 
-每次 DSH 升级后都要重跑——稳定后缀在上游组件重建时也可能消失或变化。
+每次 DSH 升级后都需要重新运行——稳定后缀在上游组件重建时也可能消失或变化。
 
 这些检查对应的发现记录见 `MOBILE-FIT-AUDIT.md`。
 
