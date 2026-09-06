@@ -29,6 +29,8 @@
     "tools/verify-mobile-fit.mjs",
     "tools/verify-mobile-geometry.mjs",
     "cordis.patch.yml",
+    "docs/HOW-IT-WORKS.md",
+    "docs/HOW-IT-WORKS.zh-CN.md",
     "MOBILE-FIT-AUDIT.md",
     "README.md",
     "LICENSE"
