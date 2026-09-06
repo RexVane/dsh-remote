@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import http from "node:http";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 
 import {
+	collectAssetUrls,
 	explorerEntryCompare,
 	applyWithDeps,
 	buildServeArgs,
@@ -106,6 +109,9 @@ function commonDeps(logs, storeFactory, run, selfInfo, extra = {}) {
 		selfInfo,
 		createServeConfigStore: storeFactory,
 		retryDelays: [],
+		// applyWithDeps turns prewarm on by default; unit tests must not open
+		// real sockets against 127.0.0.1 while the suite runs.
+		prewarm: false,
 		...extra,
 	};
 }
@@ -1149,3 +1155,90 @@ test("static enhancer keeps gzip on slow-to-build session.list but bails to live
 	dispose();
 });
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+test("static enhancer serves brotli when advertised and keeps gzip/raw for the rest", async () => {
+	const listeners = [];
+	const server = {
+		listeners: () => listeners.slice(),
+		removeAllListeners: (event) => { if (event === "request") listeners.length = 0; },
+		on: (event, fn) => { if (event === "request") listeners.push(fn); },
+	};
+	const body = Buffer.from("const x = 1;\n".repeat(400));
+	listeners.push((req, res) => {
+		res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+		res.end(body);
+	});
+	const dispose = installStaticEnhancer({ webServer: { server } });
+	const enhanced = listeners[0];
+	const makeRes = () => ({ destroyed: false, status: null, headers: null, chunks: [], writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, end(c) { if (c) this.chunks.push(Buffer.from(c)); } });
+
+	const br = makeRes();
+	await enhanced({ method: "GET", url: "/assets/app-123456.js", headers: { "accept-encoding": "gzip, deflate, br, zstd", host: "phone.example.ts.net" }, destroyed: false }, br);
+	assert.equal(br.status, 200);
+	assert.equal(br.headers["content-encoding"], "br");
+	assert.deepEqual(brotliDecompressSync(Buffer.concat(br.chunks)), body);
+
+	// the same cache entry serves a gzip-only client under the shared etag
+	const gz = makeRes();
+	await enhanced({ method: "GET", url: "/assets/app-123456.js", headers: { "accept-encoding": "gzip", host: "phone.example.ts.net" }, destroyed: false }, gz);
+	assert.equal(gz.headers["content-encoding"], "gzip");
+	assert.equal(gz.headers.etag, br.headers.etag);
+	assert.deepEqual(gunzipSync(Buffer.concat(gz.chunks)), body);
+
+	// no compression advertised: raw bytes, same etag
+	const raw = makeRes();
+	await enhanced({ method: "GET", url: "/assets/app-123456.js", headers: { "accept-encoding": "identity", host: "phone.example.ts.net" }, destroyed: false }, raw);
+	assert.equal(raw.headers["content-encoding"], undefined);
+	assert.deepEqual(Buffer.concat(raw.chunks), body);
+	dispose();
+});
+
+test("collectAssetUrls lists compressible asset URLs, keeps rev queries, skips the rest", () => {
+	const html = [
+		'<script type="module" src="/assets/index-CA9Bpko5.js"></script>',
+		'<link rel="stylesheet" crossorigin href="/assets/index-BNMwCG9c.css">',
+		'<link rel="modulepreload" href="/assets/chunk-abc123.js"/>',
+		'<img src="/assets/logo.png">',
+		'<script src="/plugins/dsh-tailscale-serve/client.js?rev=3f9a2c"></script>',
+		'<script type="module" src="/assets/index-CA9Bpko5.js"></script>',
+	].join("");
+	assert.deepEqual(collectAssetUrls(html), [
+		"/assets/index-CA9Bpko5.js",
+		"/assets/index-BNMwCG9c.css",
+		"/assets/chunk-abc123.js",
+		"/plugins/dsh-tailscale-serve/client.js?rev=3f9a2c",
+	]);
+	assert.deepEqual(collectAssetUrls(undefined), []);
+});
+
+test("prewarm populates the cache before any phone request arrives", async () => {
+	const body = Buffer.from("export const y = 2;\n".repeat(500));
+	const real = http.createServer((req, res) => {
+		if (req.url === "/") {
+			res.writeHead(200, { "content-type": "text/html" });
+			res.end('<!doctype html><script type="module" src="/assets/app-123456.js"></script>');
+			return;
+		}
+		res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+		res.end(body);
+	});
+	await new Promise((resolve) => real.listen(0, "127.0.0.1", resolve));
+	const webPort = real.address().port;
+	const dispose = installStaticEnhancer(
+		{ webServer: { server: real, port: webPort } },
+		{ prewarm: true, prewarmDelayMs: 30, prewarmPort: webPort },
+	);
+	await sleep(300);
+	const fetched = await new Promise((resolve, reject) => {
+		http.get({ host: "127.0.0.1", port: webPort, path: "/assets/app-123456.js", headers: { host: "phone.example.ts.net", "accept-encoding": "br" } }, (response) => {
+			const chunks = [];
+			response.on("data", (chunk) => chunks.push(chunk));
+			response.on("end", () => resolve({ headers: response.headers, body: Buffer.concat(chunks) }));
+		}).on("error", reject);
+	});
+	assert.equal(fetched.headers["content-encoding"], "br");
+	assert.deepEqual(brotliDecompressSync(fetched.body), body);
+	assert.equal(fetched.headers["cache-control"], "public, max-age=31536000, immutable");
+	dispose();
+	await new Promise((resolve) => real.close(resolve));
+});

@@ -208,17 +208,20 @@ If the phone still invokes `pickDirectory`, confirm that it is using the `*.ts.n
 - **Trust fence**: it pushes the resolved tailnet hostname (`<machine>.<tailnet>.ts.net`) into `webRuntime.trustedHosts`, which the already-applied `/api` fence reads per request (same array reference).
 - **Split directory picker**: the PC keeps DSH's native directory-picker backend and client. On non-loopback pages the plugin registers a directory-flow occupant whose bundle loads after DSH's stock picker; the runtime assigns each later registration on a single slot a lower automatic shadowing priority, so the plugin's flow wins there and the native client stays on the loopback PC page. Directory enumeration and child creation travel over `/tailscale-serve` with `trusted-host` authority, strict fully-qualified path checks, and a 1,000-entry bound.
 - **Static transport enhancement**: the plugin wraps the webServer's request
-  listener and serves `/assets` and `/plugins` GET responses with gzip
-  compression, an ETag, and caching headers — fingerprinted names (including
-  every `?rev=` plugin bundle URL) are `immutable`, the rest revalidate with
-  a 304. DSH ships neither, so over a DERP relay the phone re-downloaded the
-  full ~4.4MB boot payload on every page load; with the enhancement the first
-  load transfers ~1.1MB and repeat loads are near-zero. The enhancement gates
-  on the request's Host header: only non-loopback (tailnet) requests get it,
-  so the PC's `127.0.0.1` browser still receives DSH's byte-exact stock
-  responses. Response bodies are byte-identical, `/api` and event streams
-  pass through untouched, and the enhancer runs only while the plugin is
-  enabled.
+  listener and serves `/assets` and `/plugins` GET responses with Brotli
+  compression (gzip where the client does not advertise `br`), an ETag, and
+  caching headers — fingerprinted names (including every `?rev=` plugin bundle
+  URL) are `immutable`, the rest revalidate with a 304. DSH ships none of
+  these, so over a DERP relay the phone re-downloaded the full ~4.4MB boot
+  payload on every page load; with the enhancement the core assets transfer
+  ~0.4MB on the first load and repeat loads are near-zero. Once the Serve
+  route is verified the plugin also pre-warms the response cache from DSH's
+  own `index.html`, so the first phone load after a DSH restart never pays
+  on-demand compression. The enhancement gates on the request's Host header:
+  only non-loopback (tailnet) requests get it, so the PC's `127.0.0.1`
+  browser still receives DSH's byte-exact stock responses. Response bodies
+  are byte-identical, `/api` and event streams pass through untouched, and
+  the enhancer runs only while the plugin is enabled.
 - **Cleanup**: on normal dispose, it removes only the verified `/` handler owned by this process. The update is built from the latest config and posted with `If-Match: <ETag>`; a concurrent change returns HTTP 412 and is retried from the new state, so unrelated routes are preserved rather than replaced. If the root handler or listener mode changed, cleanup stops without a write. If same-port Funnel state changed, cleanup performs a handler-only safety removal that preserves the current TCP/Funnel listener; it never disables the other process's Funnel. `keepOnExit:true` skips this removal.
 
 A hard crash or forced process termination cannot run the disposer. Inspect

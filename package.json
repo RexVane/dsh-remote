@@ -1,6 +1,6 @@
 {
   "name": "dsh-tailscale-serve",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Expose the DSH web GUI over your Tailscale tailnet — one URL for LAN (direct) and WAN (DERP relay), with automatic TLS and automatic /api trust-fence inclusion (no --trusted-host needed).",
   "type": "module",
   "main": "lib/index.js",
