@@ -4,7 +4,7 @@
 
 一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH)插件:把 DSH 网页 GUI 通过 **Tailscale tailnet** 暴露出去——手机、平板、tailnet 里的任何浏览器,同一个网址都能用。在家(Wi-Fi 直连)在外(DERP 中继)都行,TLS 自动配置,支持远程工作区选择器,无需 `--trusted-host`。
 
-> **兼容目标**:主机——Windows 已端到端验证;macOS 列出 `/Volumes`,Linux 从主目录开始(均有测试覆盖,未在真实硬件上执行)· 客户端——任何现代浏览器;Android Chrome 已在真机验证,iOS Safari 尚未在真机执行 · DSH `0.1.0-rc.8`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重新运行 `npm run check:all`,再视为已验证。
+> **兼容目标**:主机——Windows 已端到端验证;macOS 列出 `/Volumes`,Linux 从主目录开始(均有测试覆盖,未在真实硬件上执行)· 客户端——任何现代浏览器;Android Chrome 已在真机验证,iOS Safari 尚未在真机执行 · DSH `0.1.0-rc.8` 至 `0.1.5-rc.1`(信任围栏与私有 RPC 行为另在 `0.1.1-rc.2` 实测;`0.1.5-rc.1` 需要 v0.4.3 的注入作用域注册)· Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`。DSH 每次升级后请重新运行 `npm run check:all`,再视为已验证。
 
 ## 前提条件
 
@@ -19,7 +19,7 @@
 
 ```powershell
 # 1. DSH 本体(全局安装;npx 一次性缓存已被证明脆弱)
-npm install -g @deepseek-ai/dsh@0.1.0-rc.8
+npm install -g @deepseek-ai/dsh@0.1.5-rc.1
 
 # 2. 本插件装进 web profile(在插件目录内执行;
 #    发布到 npm 后,这里直接写包名也可以)

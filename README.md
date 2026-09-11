@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that exposes the web GUI over your **Tailscale tailnet** — one URL for the phone, the tablet, or any browser on your tailnet. Works on **Wi-Fi (direct)** and **away (DERP relay)**, with automatic TLS, a remote workspace picker, and no `--trusted-host` flag.
 
-> **Compatibility:** host — Windows verified end to end; macOS lists `/Volumes` and Linux starts at the home directory (covered by tests, not exercised on real hardware) · client — any modern browser; Android Chrome verified on a real device, iOS Safari not yet exercised on hardware · DSH `0.1.0-rc.8` (fence/RPC behaviour additionally verified on `0.1.1-rc.2`) · Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`. Re-run `npm run check:all` after every DSH upgrade before trusting the selector-sensitive mobile layer.
+> **Compatibility:** host — Windows verified end to end; macOS lists `/Volumes` and Linux starts at the home directory (covered by tests, not exercised on real hardware) · client — any modern browser; Android Chrome verified on a real device, iOS Safari not yet exercised on hardware · DSH `0.1.0-rc.8` through `0.1.5-rc.1` (fence/RPC behaviour additionally verified on `0.1.1-rc.2`; `0.1.5-rc.1` needs v0.4.3's inject-scope registration) · Tailscale `1.102.x` · Node.js `^22.19.0 || >=24.0.0`. Re-run `npm run check:all` after every DSH upgrade before trusting the selector-sensitive mobile layer.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Two additional requirements:
 
 ```powershell
 # 1. DSH itself (global install; the npx one-shot cache is fragile)
-npm install -g @deepseek-ai/dsh@0.1.0-rc.8
+npm install -g @deepseek-ai/dsh@0.1.5-rc.1
 
 # 2. this plugin into the web profile (run inside the plugin directory;
 #    once published to npm, the package name works here too)
